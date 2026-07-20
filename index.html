@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glass Shop — Bid & Invoice</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #242424;
+    --border: #383838;
+    --accent: #ffffff;
+    --accent2: #aaaaaa;
+    --text: #f0f0f0;
+    --muted: #777777;
+    --danger: #cc3333;
+    --green: #2ab89a;
+    --invoice-accent: #e8c27a;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    padding: 2rem 1rem;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255,255,255,0.04) 0%, transparent 60%),
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(80,80,80,0.2) 39px, rgba(80,80,80,0.2) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(80,80,80,0.1) 39px, rgba(80,80,80,0.1) 40px);
+  }
+
+  .container { max-width: 820px; margin: 0 auto; animation: fadeUp 0.5s ease both; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  header {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+
+  h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2rem, 5vw, 3rem);
+    letter-spacing: 0.05em;
+    line-height: 1;
+    color: var(--text);
+  }
+  h1 span { color: var(--accent); }
+  .subtitle { font-size: 0.8rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; font-family: 'DM Mono', monospace; }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.75rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  .tab-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.1em;
+    padding: 0.75rem 1rem;
+    transition: all 0.2s;
+    position: relative;
+    border-right: 1px solid var(--border);
+  }
+  .tab-btn:last-child { border-right: none; }
+  .tab-btn::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: transparent;
+    transition: background 0.2s;
+  }
+  .tab-btn.active { color: var(--text); background: rgba(255,255,255,0.04); }
+  .tab-btn.active::after { background: var(--accent); }
+  .tab-btn[data-tab="invoice"].active::after { background: var(--invoice-accent); }
+  .tab-btn[data-tab="invoice"].active { color: var(--invoice-accent); }
+  .tab-btn:hover:not(.active) { color: var(--accent2); background: rgba(255,255,255,0.02); }
+
+  .tab-pill {
+    display: inline-block;
+    background: rgba(232,194,122,0.15);
+    color: var(--invoice-accent);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+    position: relative;
+    top: -1px;
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── GRID / CARDS (shared) ── */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 580px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: rgba(255,255,255,0.12); }
+  .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent), transparent); }
+  .card.full { grid-column: 1 / -1; }
+  .card.accent-alt::before { background: linear-gradient(90deg, var(--accent2), transparent); }
+  .card.labor-card::before { background: linear-gradient(90deg, #7ab8e8, transparent); }
+  .labor-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; animation: slideIn 0.2s ease both; }
+  .card.invoice-accent::before { background: linear-gradient(90deg, var(--invoice-accent), transparent); }
+
+  .card-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .card.accent-alt .card-label { color: var(--accent2); }
+  .card.invoice-accent .card-label { color: var(--invoice-accent); }
+  .card-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.35rem; letter-spacing: 0.05em; }
+  .field { margin-bottom: 1rem; }
+  .field:last-child { margin-bottom: 0; }
+
+  input[type="number"], input[type="text"], input[type="date"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 1rem;
+    padding: 0.6rem 0.85rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    -moz-appearance: textfield;
+  }
+  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,255,255,0.06); }
+
+  /* Pieces */
+  .pieces-scroll { max-height: 280px; overflow-y: auto; padding-right: 2px; }
+  .pieces-scroll::-webkit-scrollbar { width: 4px; }
+  .pieces-scroll::-webkit-scrollbar-track { background: transparent; }
+  .pieces-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .pieces-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .piece-row { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; animation: slideIn 0.2s ease both; }
+  .piece-row-top { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+  .piece-row-bottom { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+  .edge-label { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: var(--muted); letter-spacing: 0.08em; white-space: nowrap; }
+  .piece-row input[type="number"] { flex: 1 1 80px; min-width: 70px; }
+  .edge-name-input { flex: 1 1 120px; min-width: 100px; }
+  .edge-cpf-input { width: 80px; flex-shrink: 0; }
+  .piece-edge-total { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--accent2); background: rgba(255,255,255,0.07); border-radius: 5px; padding: 0.3rem 0.45rem; white-space: nowrap; flex-shrink: 0; }
+  .piece-glass-total { font-family: 'DM Mono', monospace; font-size: 0.78rem; color: var(--accent); background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.12); border-radius: 5px; padding: 0.3rem 0.55rem; white-space: nowrap; flex-shrink: 0; font-weight: 500; }
+  .piece-rate-input { width: 90px; flex-shrink: 0; }
+  .piece-row-mid { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+  .dim-sep { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--muted); }
+  .piece-sqft { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--accent); background: rgba(255,255,255,0.07); border-radius: 5px; padding: 0.35rem 0.5rem; white-space: nowrap; min-width: 64px; text-align: center; }
+
+  @keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+
+  .btn-remove { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 1rem; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+  .btn-remove:hover { border-color: var(--danger); color: var(--danger); }
+  .btn-add { background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.3); border-radius: 8px; color: var(--accent); cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.75rem; letter-spacing: 0.08em; padding: 0.5rem 1rem; width: 100%; margin-top: 0.75rem; transition: all 0.15s; }
+  .btn-add:hover { background: rgba(255,255,255,0.10); border-style: solid; }
+  .btn-add.invoice-btn { color: var(--invoice-accent); border-color: rgba(232,194,122,0.35); }
+  .btn-add.invoice-btn:hover { background: rgba(232,194,122,0.08); border-style: solid; }
+
+  /* Hardware */
+  .hw-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; animation: slideIn 0.2s ease both; }
+
+  /* Extras */
+  .extra-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.6rem; animation: slideIn 0.2s ease both; }
+  .extra-name { flex: 1 1 120px; min-width: 100px; }
+  .extra-amount { width: 80px; flex-shrink: 0; }
+  .type-toggle { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; flex-shrink: 0; }
+  .type-toggle button { background: none; border: none; color: var(--muted); cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.8rem; padding: 0.4rem 0.65rem; transition: all 0.15s; min-width: 28px; }
+  .type-toggle button.active { background: rgba(255,255,255,0.12); color: var(--accent); font-weight: 500; }
+
+  /* Total card (bid) */
+  .total-card { background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.18); border-radius: 12px; padding: 1.5rem; grid-column: 1 / -1; }
+  .total-card::before { background: linear-gradient(90deg, var(--accent), rgba(255,255,255,0.15)); }
+  .breakdown { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem; }
+  .line-item { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .line-item.total-glass { color: var(--accent); }
+  .line-item span:last-child { font-weight: 500; color: var(--text); }
+  .line-item.total-glass span:last-child { color: var(--accent); }
+  .divider { height: 1px; background: var(--border); margin: 0.5rem 0; }
+  .grand-total { display: flex; justify-content: space-between; align-items: baseline; }
+  .grand-label { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.05em; color: var(--text); }
+  .grand-value { font-family: 'Bebas Neue', sans-serif; font-size: 2.8rem; letter-spacing: 0.02em; color: var(--accent); transition: all 0.2s; }
+  .btn-print { margin-top: 1.25rem; width: 100%; background: var(--accent); border: none; border-radius: 8px; color: #0f0f0f; cursor: pointer; font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 0.1em; padding: 0.75rem; transition: all 0.15s; }
+  .btn-print:hover { background: #dddddd; transform: translateY(-1px); }
+  .btn-print:active { transform: translateY(0); }
+
+  @keyframes pulse {
+    0% { text-shadow: 0 0 0 rgba(74,240,196,0); }
+    50% { text-shadow: 0 0 20px rgba(255,255,255,0.4); }
+    100% { text-shadow: 0 0 0 rgba(74,240,196,0); }
+  }
+  .grand-value.updated { animation: pulse 0.4s ease; }
+
+  /* ── INVOICE TAB ── */
+  .invoice-total-card {
+    background: linear-gradient(135deg, rgba(232,194,122,0.08), rgba(232,194,122,0.02));
+    border: 1px solid rgba(232,194,122,0.3);
+    border-radius: 12px;
+    padding: 1.5rem;
+    grid-column: 1 / -1;
+  }
+  .invoice-total-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--invoice-accent), transparent); }
+  .grand-value.invoice { color: var(--invoice-accent); }
+  .btn-print.invoice { background: var(--invoice-accent); color: #0f0f0f; }
+  .btn-print.invoice:hover { background: #f0d28e; }
+
+  /* Invoice line items table */
+  .inv-items-list { display: flex; flex-direction: column; gap: 0.5rem; }
+  .inv-item-row {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    display: grid;
+    grid-template-columns: 2fr 70px 90px 90px auto;
+    gap: 0.5rem;
+    align-items: center;
+    animation: slideIn 0.2s ease both;
+  }
+  @media (max-width: 580px) { .inv-item-row { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; } }
+  .inv-item-row input { background: transparent; border: none; border-bottom: 1px solid var(--border); border-radius: 0; padding: 0.3rem 0.2rem; font-size: 0.9rem; }
+  .inv-item-row input:focus { border-bottom-color: var(--invoice-accent); box-shadow: none; }
+  .inv-line-total { font-family: 'DM Mono', monospace; font-size: 0.82rem; color: var(--invoice-accent); text-align: right; white-space: nowrap; }
+
+  .inv-col-header {
+    display: grid;
+    grid-template-columns: 2fr 70px 90px 90px 30px;
+    gap: 0.5rem;
+    padding: 0 0.75rem 0.4rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  /* Status badge */
+  .status-bar {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    transition: all 0.15s;
+    background: var(--surface2);
+    color: var(--muted);
+  }
+  .status-badge.active-status { color: var(--text); }
+  .status-badge[data-status="draft"].active-status { background: rgba(120,120,120,0.2); border-color: #777; color: #aaa; }
+  .status-badge[data-status="sent"].active-status { background: rgba(74,130,220,0.15); border-color: #4a82dc; color: #7aabf5; }
+  .status-badge[data-status="paid"].active-status { background: rgba(42,184,154,0.15); border-color: var(--green); color: var(--green); }
+  .status-badge[data-status="overdue"].active-status { background: rgba(204,51,51,0.15); border-color: var(--danger); color: #e06060; }
+
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+  /* Payment record */
+  .payment-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; animation: slideIn 0.2s ease both; }
+  .payment-row input[type="date"] { max-width: 150px; }
+  .payment-row input[type="number"] { max-width: 110px; }
+  .payment-note { flex: 1; min-width: 120px; }
+
+  /* Balance indicator */
+  .balance-block { display: flex; justify-content: space-between; align-items: center; background: var(--surface2); border-radius: 8px; padding: 0.75rem 1rem; margin-top: 0.75rem; }
+  .balance-label { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+  .balance-value { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: var(--invoice-accent); }
+  .balance-value.paid-off { color: var(--green); }
+
+  /* Import from bid */
+  .import-bar {
+    background: rgba(232,194,122,0.06);
+    border: 1px dashed rgba(232,194,122,0.3);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+  .import-bar-text { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--invoice-accent); }
+  .import-bar-text span { color: var(--muted); }
+  .btn-import { background: rgba(232,194,122,0.12); border: 1px solid rgba(232,194,122,0.4); border-radius: 6px; color: var(--invoice-accent); cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.72rem; letter-spacing: 0.08em; padding: 0.4rem 0.85rem; transition: all 0.15s; white-space: nowrap; }
+  .btn-import:hover { background: rgba(232,194,122,0.2); }
+
+  /* Terms */
+  .terms-select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.9rem;
+    padding: 0.6rem 0.85rem;
+    outline: none;
+    transition: border-color 0.2s;
+    appearance: none;
+    cursor: pointer;
+  }
+  .terms-select:focus { border-color: var(--invoice-accent); }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <img src="logo.png" alt="American Legacy Glass" style="width:80px;height:80px;object-fit:contain;flex-shrink:0;">
+    <div>
+      <div class="subtitle">Estimating & Invoicing Tool</div>
+      <h1>American Legacy <span>Glass</span></h1>
+    </div>
+    <button onclick="resetBid()" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-family:'DM Mono',monospace;font-size:0.72rem;letter-spacing:0.08em;padding:0.45rem 0.9rem;transition:all 0.15s;white-space:nowrap;" onmouseover="this.style.borderColor='var(--danger)';this.style.color='var(--danger)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">↺ NEW BID</button>
+  </header>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="bid" onclick="switchTab('bid')">📋 Bid Estimate</button>
+    <button class="tab-btn" data-tab="invoice" onclick="switchTab('invoice')">🧾 Invoice<span class="tab-pill">NEW</span></button>
+  </div>
+
+  <!-- BID TAB -->
+  <div class="tab-panel active" id="tab-bid">
+    <div class="grid">
+
+      <!-- Job Info -->
+      <div class="card full">
+        <div class="card-label">Job Info</div>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+          <div class="field" style="flex:1;min-width:180px;margin-bottom:0;">
+            <label>Customer Name</label>
+            <input type="text" id="customerName" placeholder="e.g. John Smith" oninput="syncJobInfo()">
+          </div>
+          <div class="field" style="flex:1;min-width:180px;margin-bottom:0;">
+            <label>Job Description</label>
+            <input type="text" id="jobDesc" placeholder="e.g. Shower enclosure" oninput="syncJobInfo()">
+          </div>
+          <div class="field" style="flex:1;min-width:200px;margin-bottom:0;">
+            <label>Job Location</label>
+            <input type="text" id="jobLocation" placeholder="e.g. 123 Main St, Phoenix AZ" oninput="syncJobInfo()">
+          </div>
+          <div class="field" style="width:160px;margin-bottom:0;">
+            <label>Date</label>
+            <input type="date" id="bidDate">
+          </div>
+          <div class="field" style="width:140px;margin-bottom:0;display:flex;flex-direction:column;justify-content:flex-end;">
+            <label>Tax Exempt</label>
+            <button id="taxExemptBtn" onclick="toggleTaxExempt()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-family:'DM Mono',monospace;font-size:0.8rem;padding:0.6rem 0.85rem;text-align:left;transition:all 0.2s;">○ Not Exempt</button>
+          </div>
+        </div>
+      </div>
+
+      <input type="hidden" id="pricePerSqft" value="">
+      <input type="hidden" id="glassThickness" value="">
+      <input type="hidden" id="glassType" value="">
+      <!-- Glass Pieces -->
+      <div class="card full">
+        <div class="card-label">Glass Pieces — Dimensions</div>
+        <div class="pieces-scroll">
+          <div class="pieces-list" id="piecesList"></div>
+        </div>
+        <button class="btn-add" onclick="addPiece()">+ Add Piece</button>
+      </div>
+
+      <!-- Hardware -->
+      <div class="card">
+        <div class="card-label">Hardware Costs</div>
+        <div id="hwList"></div>
+        <button class="btn-add" onclick="addHardware()">+ Add Hardware Item</button>
+      </div>
+
+      <!-- Labor -->
+      <div class="card" style="--card-accent:#7ab8e8;">
+        <div class="card-label" style="color:#7ab8e8;">Labor Costs <span style="font-size:0.6rem;background:rgba(122,184,232,0.12);color:#7ab8e8;border:1px solid rgba(122,184,232,0.3);border-radius:3px;padding:0.1rem 0.35rem;letter-spacing:0.06em;margin-left:0.25rem;">TAX FREE</span></div>
+        <div id="laborList"></div>
+        <button class="btn-add" style="color:#7ab8e8;border-color:rgba(122,184,232,0.35);" onclick="addLabor()">+ Add Labor Item</button>
+      </div>
+
+      <!-- Additional Costs -->
+      <div class="card accent-alt">
+        <div class="card-label">Additional Costs</div>
+        <div id="extraList"></div>
+        <button class="btn-add" onclick="addExtra()">+ Add Cost</button>
+      </div>
+
+      <!-- Notes -->
+      <div class="card full">
+        <div class="card-label">Additional Notes</div>
+        <textarea id="bidNotes" placeholder="e.g. Installation included, customer to provide measurements, lead time 2 weeks..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.9rem;padding:0.65rem 0.85rem;outline:none;resize:vertical;min-height:90px;transition:border-color 0.2s;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+      </div>
+
+      <!-- Total -->
+      <div class="card total-card">
+        <div class="card-label">Bid Summary</div>
+        <div class="breakdown" id="breakdown"></div>
+        <div class="grand-total">
+          <div class="grand-label">Total Bid</div>
+          <div class="grand-value" id="grandTotal">$0.00</div>
+        </div>
+        <button class="btn-print" onclick="saveBidPDF()">⬇ Save Bid as PDF</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- INVOICE TAB -->
+  <div class="tab-panel" id="tab-invoice">
+    <div class="grid">
+
+      <!-- Import from bid -->
+      <div class="card full invoice-accent" style="padding:1rem 1.25rem;">
+        <div class="card-label">Quick Import</div>
+        <div class="import-bar">
+          <div class="import-bar-text">Import line items from your current Bid Estimate <span>— populates items, customer & totals automatically</span></div>
+          <button class="btn-import" onclick="importFromBid()">⬆ Import from Bid</button>
+        </div>
+        <!-- Status & Invoice # row -->
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:1;min-width:160px;">
+            <label>Invoice #</label>
+            <input type="text" id="invNumber" placeholder="INV-0001">
+          </div>
+          <div style="flex:1;min-width:160px;">
+            <label>Invoice Date</label>
+            <input type="date" id="invDate">
+          </div>
+          <div style="flex:1;min-width:160px;">
+            <label>Due Date</label>
+            <input type="date" id="invDueDate">
+          </div>
+          <div style="flex:1;min-width:140px;">
+            <label>Payment Terms</label>
+            <select class="terms-select" id="invTerms" onchange="updateDueFromTerms()">
+              <option value="custom">Custom Date</option>
+              <option value="completed">When Completed</option>
+              <option value="0">Due on Receipt</option>
+              <option value="15">Net 15</option>
+              <option value="30" selected>Net 30</option>
+              <option value="60">Net 60</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Customer / Bill To -->
+      <div class="card invoice-accent">
+        <div class="card-label">Bill To</div>
+        <div class="field">
+          <label>Customer Name</label>
+          <input type="text" id="invCustomer" placeholder="e.g. John Smith">
+        </div>
+        <div class="field">
+          <label>Company (optional)</label>
+          <input type="text" id="invCompany" placeholder="e.g. Smith Renovations LLC">
+        </div>
+        <div class="field">
+          <label>Address</label>
+          <input type="text" id="invAddress" placeholder="Street address">
+        </div>
+        <div class="field">
+          <label>City, State, ZIP</label>
+          <input type="text" id="invCityState" placeholder="Phoenix, AZ 85001">
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>Phone / Email</label>
+          <input type="text" id="invContact" placeholder="(602) 555-0000 or email@email.com">
+        </div>
+      </div>
+
+      <!-- Job Info (invoice side) -->
+      <div class="card invoice-accent">
+        <div class="card-label">Job Details</div>
+        <div class="field">
+          <label>Job Description</label>
+          <input type="text" id="invJobDesc" placeholder="e.g. Shower enclosure — master bath">
+        </div>
+        <div class="field">
+          <label>Job Address (if different)</label>
+          <input type="text" id="invJobAddress" placeholder="e.g. 123 Main St, Scottsdale AZ">
+        </div>
+        <div class="field">
+          <label>Purchase Order # (optional)</label>
+          <input type="text" id="invPO" placeholder="PO-XXXX">
+        </div>
+        <div class="field">
+          <label>Invoice Status</label>
+          <div class="status-bar" style="margin-top:0.25rem;">
+            <div class="status-badge active-status" data-status="draft" onclick="setInvStatus('draft')"><div class="status-dot"></div>Draft</div>
+            <div class="status-badge" data-status="sent" onclick="setInvStatus('sent')"><div class="status-dot"></div>Sent</div>
+            <div class="status-badge" data-status="paid" onclick="setInvStatus('paid')"><div class="status-dot"></div>Paid</div>
+            <div class="status-badge" data-status="overdue" onclick="setInvStatus('overdue')"><div class="status-dot"></div>Overdue</div>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>Tax Exempt</label>
+          <button id="invTaxExemptBtn" onclick="toggleInvTaxExempt()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-family:'DM Mono',monospace;font-size:0.8rem;padding:0.6rem 0.85rem;text-align:left;transition:all 0.2s;">○ Not Exempt</button>
+        </div>
+      </div>
+
+      <!-- Line Items -->
+      <div class="card full invoice-accent">
+        <div class="card-label">Line Items</div>
+        <div class="inv-col-header">
+          <span>Description</span><span>Qty</span><span>Unit Price</span><span>Total</span><span></span>
+        </div>
+        <div class="inv-items-list" id="invItemsList"></div>
+        <button class="btn-add invoice-btn" onclick="addInvItem()">+ Add Line Item</button>
+      </div>
+
+      <!-- Payments Received -->
+      <div class="card invoice-accent">
+        <div class="card-label">Payments Received</div>
+        <div id="paymentsList"></div>
+        <button class="btn-add invoice-btn" onclick="addPayment()">+ Record Payment</button>
+        <div class="balance-block" id="balanceBlock">
+          <div>
+            <div class="balance-label">Balance Due</div>
+            <div style="font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--muted);" id="balanceSub">After payments</div>
+          </div>
+          <div class="balance-value" id="balanceDue">$0.00</div>
+        </div>
+      </div>
+
+      <!-- Invoice Notes / Terms -->
+      <div class="card invoice-accent">
+        <div class="card-label">Notes & Terms</div>
+        <div class="field">
+          <label>Invoice Notes</label>
+          <textarea id="invNotes" placeholder="e.g. Thank you for your business! All work guaranteed for 1 year." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.9rem;padding:0.65rem 0.85rem;outline:none;resize:vertical;min-height:80px;transition:border-color 0.2s;" onfocus="this.style.borderColor='var(--invoice-accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>Payment Instructions</label>
+          <textarea id="invPayInstructions" placeholder="e.g. Make checks payable to American Legacy Glass. Venmo: @amlegacyglass. Card accepted." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:0.9rem;padding:0.65rem 0.85rem;outline:none;resize:vertical;min-height:70px;transition:border-color 0.2s;" onfocus="this.style.borderColor='var(--invoice-accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+        </div>
+      </div>
+
+      <!-- Invoice Total -->
+      <div class="card invoice-total-card" style="position:relative;">
+        <div class="card-label" style="color:var(--invoice-accent);">Invoice Summary</div>
+        <div class="breakdown" id="invBreakdown"></div>
+        <div class="grand-total">
+          <div class="grand-label">Invoice Total</div>
+          <div class="grand-value invoice" id="invGrandTotal">$0.00</div>
+        </div>
+        <button class="btn-print invoice" onclick="saveInvoicePDF()">⬇ Save Invoice as PDF</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────────
+// SHARED STATE
+// ─────────────────────────────────────────────────
+let pieces   = [];
+let hardware = [];
+let labor    = [];
+let extras   = [];
+let invItems = [];
+let payments = [];
+let invStatus = 'draft';
+let invTaxExemptActive = false;
+
+function uid() { return Math.random().toString(36).slice(2,7); }
+function fmt(n) { const safe = isNaN(n) ? 0 : n; return '$' + safe.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+// ─────────────────────────────────────────────────
+// TAB SWITCHING
+// ─────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+  if (tab === 'invoice') calcInvoice();
+}
+
+// ─────────────────────────────────────────────────
+// SYNC JOB INFO → INVOICE
+// ─────────────────────────────────────────────────
+function syncJobInfo() {
+  const name = document.getElementById('customerName').value;
+  const desc = document.getElementById('jobDesc').value;
+  const loc  = document.getElementById('jobLocation').value;
+  if (!document.getElementById('invCustomer').value)    document.getElementById('invCustomer').value    = name;
+  if (!document.getElementById('invJobDesc').value)     document.getElementById('invJobDesc').value     = desc;
+  if (!document.getElementById('invJobAddress').value)  document.getElementById('invJobAddress').value  = loc;
+}
+
+// ─────────────────────────────────────────────────
+// BID — PIECES
+// ─────────────────────────────────────────────────
+function addPiece() {
+  const globalRate = parseFloat(document.getElementById('pricePerSqft').value) || 0;
+  pieces.push({ id: uid(), w: '', h: '', qty: '1', rate: globalRate ? String(globalRate) : '', thickness: '', glassType: '', edgeName: '', edgeCpf: '' });
+  renderPieces();
+}
+function getPieceGlassTotal(p) {
+  const w = parseFloat(p.w)||0, h = parseFloat(p.h)||0, qty = parseFloat(p.qty)||1;
+  const rate = parseFloat(p.rate)||0;
+  return (w * h / 144 * qty) * rate;
+}
+function removePiece(id) { pieces = pieces.filter(p => p.id !== id); renderPieces(); calculate(); }
+
+function getPieceDisplay(p) {
+  const w = parseFloat(p.w)||0, h = parseFloat(p.h)||0, qty = parseFloat(p.qty)||1;
+  if (!w || !h) return 'piece';
+  return (qty > 1 ? qty + '× ' : '') + w + 'x' + h + '"';
+}
+function getPiecePerimFt(p) {
+  const w = parseFloat(p.w)||0, h = parseFloat(p.h)||0, qty = parseFloat(p.qty)||1;
+  return (w && h) ? 2*(w+h)*qty : 0;
+}
+function getPieceEdgeTotal(p) { return getPiecePerimFt(p) * (parseFloat(p.edgeCpf)||0); }
+
+function getSqft(p) {
+  const w = parseFloat(p.w)||0, h = parseFloat(p.h)||0, qty = parseFloat(p.qty)||1;
+  if (!w || !h) return '—';
+  return (w*h/144*qty).toFixed(3) + ' ft²';
+}
+function updatePieceSqft(id) {
+  const p = pieces.find(x => x.id === id);
+  const el = document.getElementById('sqft_'+id);
+  if (el && p) el.textContent = getSqft(p);
+}
+
+function renderPieces() {
+  const list = document.getElementById('piecesList');
+  list.innerHTML = '';
+  pieces.forEach((p, i) => {
+    const perim = getPiecePerimFt(p), edgeTotal = getPieceEdgeTotal(p);
+    const showEdge = perim > 0 && parseFloat(p.edgeCpf) > 0;
+    const glassTotal = getPieceGlassTotal(p);
+    const showGlass = glassTotal > 0;
+    const row = document.createElement('div');
+    row.className = 'piece-row';
+    row.innerHTML = `
+      <div class="piece-row-top">
+        <input type="number" placeholder="W (in)" min="0" step="0.25" value="${p.w}"
+          oninput="pieces[${i}].w=this.value;updatePieceSqft('${p.id}');calculate()">
+        <span class="dim-sep">×</span>
+        <input type="number" placeholder="H (in)" min="0" step="0.25" value="${p.h}"
+          oninput="pieces[${i}].h=this.value;updatePieceSqft('${p.id}');calculate()">
+        <input type="number" placeholder="Qty" min="1" step="1" value="${p.qty||1}"
+          oninput="pieces[${i}].qty=this.value;updatePieceSqft('${p.id}');calculate()" style="max-width:58px;">
+        <div class="piece-sqft" id="sqft_${p.id}">${getSqft(p)}</div>
+        <button class="btn-remove" onclick="removePiece('${p.id}')">✕</button>
+      </div>
+      <div class="piece-row-mid">
+        <span class="edge-label">GLASS:</span>
+        <input type="text" placeholder='Thickness (e.g. 3/8")' value="${p.thickness}"
+          oninput="pieces[${i}].thickness=this.value;calculate()" style="flex:1 1 100px;min-width:80px;">
+        <input type="text" placeholder='Type (e.g. Clear)' value="${p.glassType}"
+          oninput="pieces[${i}].glassType=this.value;calculate()" style="flex:1 1 100px;min-width:80px;">
+        <span class="edge-label">$/FT²:</span>
+        <input type="number" class="piece-rate-input" placeholder="0.00" min="0" step="0.01" value="${p.rate}"
+          oninput="pieces[${i}].rate=this.value;calculate()">
+        ${showGlass ? `<div class="piece-glass-total">${fmt(glassTotal)}</div>` : ''}
+      </div>
+      <div class="piece-row-bottom">
+        <span class="edge-label">EDGE:</span>
+        <input type="text" class="edge-name-input" placeholder="Edge type (optional)" value="${p.edgeName}"
+          oninput="pieces[${i}].edgeName=this.value">
+        <input type="number" class="edge-cpf-input" placeholder="$/in" min="0" step="0.01" value="${p.edgeCpf}"
+          oninput="pieces[${i}].edgeCpf=this.value;calculate()">
+        ${perim > 0 ? `<span class="edge-label">${perim.toFixed(2)} in</span>` : ''}
+        ${showEdge ? `<div class="piece-edge-total">${fmt(edgeTotal)}</div>` : ''}
+      </div>`;
+    list.appendChild(row);
+  });
+}
+
+function totalSqft() {
+  return pieces.reduce((s,p) => {
+    const w = parseFloat(p.w)||0, h = parseFloat(p.h)||0, qty = parseFloat(p.qty)||1;
+    return s + (w*h/144*qty);
+  }, 0);
+}
+function totalGlass() {
+  return pieces.reduce((s,p) => s + getPieceGlassTotal(p), 0);
+}
+function totalEdging() { return pieces.reduce((s,p) => s + getPieceEdgeTotal(p), 0); }
+
+// ─────────────────────────────────────────────────
+// BID — LABOR
+// ─────────────────────────────────────────────────
+function addLabor() { labor.push({ id: uid(), name: '', cost: '' }); renderLabor(); }
+function removeLabor(id) { labor = labor.filter(l => l.id !== id); renderLabor(); calculate(); }
+function renderLabor() {
+  const list = document.getElementById('laborList');
+  list.innerHTML = '';
+  labor.forEach((l, i) => {
+    const row = document.createElement('div');
+    row.className = 'labor-row';
+    row.innerHTML = `
+      <input type="text" placeholder="e.g. Installation, Templating" value="${l.name}" oninput="labor[${i}].name=this.value" style="border-color:rgba(122,184,232,0.25);">
+      <input type="number" placeholder="$0.00" min="0" step="0.01" value="${l.cost}"
+        oninput="labor[${i}].cost=this.value;calculate()" style="max-width:90px;border-color:rgba(122,184,232,0.25);">
+      <button class="btn-remove" onclick="removeLabor('${l.id}')">✕</button>`;
+    list.appendChild(row);
+  });
+}
+function totalLabor() { return labor.reduce((s,l) => s+(parseFloat(l.cost)||0), 0); }
+
+// ─────────────────────────────────────────────────
+// BID — HARDWARE
+// ─────────────────────────────────────────────────
+function addHardware() { hardware.push({ id: uid(), name: '', cost: '' }); renderHardware(); }
+function removeHardware(id) { hardware = hardware.filter(h => h.id !== id); renderHardware(); calculate(); }
+function renderHardware() {
+  const list = document.getElementById('hwList');
+  list.innerHTML = '';
+  hardware.forEach((h, i) => {
+    const row = document.createElement('div');
+    row.className = 'hw-row';
+    row.innerHTML = `
+      <input type="text" placeholder="Item name" value="${h.name}" oninput="hardware[${i}].name=this.value">
+      <input type="number" placeholder="$0.00" min="0" step="0.01" value="${h.cost}"
+        oninput="hardware[${i}].cost=this.value;calculate()" style="max-width:90px">
+      <button class="btn-remove" onclick="removeHardware('${h.id}')">✕</button>`;
+    list.appendChild(row);
+  });
+}
+function totalHardware() { return hardware.reduce((s,h) => s+(parseFloat(h.cost)||0), 0); }
+
+// ─────────────────────────────────────────────────
+// BID — EXTRAS
+// ─────────────────────────────────────────────────
+function addExtra() { extras.push({ id: uid(), name: '', value: '', type: '$' }); renderExtras(); }
+function removeExtra(id) { extras = extras.filter(e => e.id !== id); renderExtras(); calculate(); }
+function setExtraType(i, type) { extras[i].type = type; extras[i].value = ''; renderExtras(); calculate(); }
+function renderExtras() {
+  const list = document.getElementById('extraList');
+  list.innerHTML = '';
+  extras.forEach((e, i) => {
+    const row = document.createElement('div');
+    row.className = 'extra-row';
+    row.innerHTML = `
+      <input type="text" class="extra-name" placeholder="Description" value="${e.name}" oninput="extras[${i}].name=this.value">
+      <div class="type-toggle">
+        <button class="${e.type==='$'?'active':''}" onclick="setExtraType(${i},'$')">$</button>
+        <button class="${e.type==='%'?'active':''}" onclick="setExtraType(${i},'%')">%</button>
+      </div>
+      <input type="number" class="extra-amount" placeholder="0.00" min="0" step="0.01" value="${e.value}"
+        oninput="extras[${i}].value=this.value;calculate()">
+      <button class="btn-remove" onclick="removeExtra('${e.id}')">✕</button>`;
+    list.appendChild(row);
+  });
+}
+function totalExtras(base) {
+  return extras.reduce((s,e) => {
+    const v = parseFloat(e.value)||0;
+    return s + (e.type === '%' ? base*(v/100) : v);
+  }, 0);
+}
+
+// ─────────────────────────────────────────────────
+// BID — CALCULATE
+// ─────────────────────────────────────────────────
+function calculate() {
+  const taxExempt  = window.taxExemptActive || false;
+  const taxRate    = taxExempt ? 0 : 9.1;
+  const glassTotal = totalGlass();
+  const hwTotal    = totalHardware();
+  const edgeTotal  = totalEdging();
+  const laborTotal = totalLabor();
+  // Labor is excluded from taxable base
+  const taxableBase  = glassTotal + hwTotal + edgeTotal;
+  const extTotal     = totalExtras(taxableBase);
+  const taxableTotal = taxableBase + extTotal;
+  const taxAmt       = taxableTotal * (taxRate/100);
+  const grand        = taxableTotal + taxAmt + laborTotal;
+
+  const extraLines = extras.map(e => {
+    const v = parseFloat(e.value)||0;
+    const amt = e.type === '%' ? taxableBase*(v/100) : v;
+    return `<div class="line-item"><span>${e.name||'Additional Cost'}${e.type==='%'?' ('+v+'%)':''}</span><span>${fmt(amt)}</span></div>`;
+  }).join('');
+
+  const edgeLines = pieces.filter(p => getPieceEdgeTotal(p) > 0).map(p => {
+    const perim = getPiecePerimFt(p), cpf = parseFloat(p.edgeCpf)||0;
+    return `<div class="line-item"><span>${p.edgeName||'Edging'} – ${getPieceDisplay(p)} (${perim.toFixed(2)} in × ${fmt(cpf)}/in)</span><span>${fmt(getPieceEdgeTotal(p))}</span></div>`;
+  }).join('');
+
+  const laborLines = labor.map(l =>
+    `<div class="line-item" style="color:#7ab8e8;"><span>${l.name||'Labor'} <span style="font-size:0.7rem;opacity:0.6;">tax-free</span></span><span>${fmt(parseFloat(l.cost)||0)}</span></div>`
+  ).join('');
+
+  // Per-piece glass lines
+  const pieceLines = pieces.filter(p => parseFloat(p.w)&&parseFloat(p.h)).map(p => {
+    const sqft = (parseFloat(p.w)*parseFloat(p.h)/144*(parseFloat(p.qty)||1));
+    const rate = parseFloat(p.rate)||0;
+    const pieceTotal = getPieceGlassTotal(p);
+    const qty = parseFloat(p.qty)||1;
+    const dim = (qty>1?qty+'× ':'')+parseFloat(p.w)+'x'+parseFloat(p.h)+'"';
+    const gparts = [p.thickness?p.thickness+'"':'', p.glassType].filter(Boolean).join(' · ');
+    const rateStr = rate ? ` @ ${fmt(rate)}/ft²` : ' (no rate set)';
+    return `<div class="line-item total-glass" style="padding-left:0.75rem;font-size:0.8rem;">
+      <span>${dim}${gparts?' · '+gparts:''} — ${sqft.toFixed(3)} ft²${rateStr}</span>
+      <span>${rate ? fmt(pieceTotal) : '—'}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('breakdown').innerHTML = `
+    <div class="line-item" style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase;margin-bottom:0.15rem;">Glass Pieces</div>
+    ${pieceLines || '<div class="line-item"><span style="color:var(--muted)">No pieces added</span><span>—</span></div>'}
+    <div class="line-item total-glass" style="margin-top:0.25rem;border-top:1px solid rgba(255,255,255,0.08);padding-top:0.4rem;">
+      <span>Glass Total</span><span>${fmt(glassTotal)}</span>
+    </div>
+    ${edgeLines}
+    <div class="line-item"><span>Hardware</span><span>${fmt(hwTotal)}</span></div>
+    ${extraLines}
+    <div class="divider"></div>
+    <div class="line-item"><span>Taxable Subtotal</span><span>${fmt(taxableTotal)}</span></div>
+    <div class="line-item"><span>${taxExempt?'Tax Exempt':'Tax (9.10%)'}</span><span>${taxExempt?'—':fmt(taxAmt)}</span></div>
+    ${laborTotal > 0 ? `<div class="divider"></div>${laborLines}<div class="line-item" style="color:#7ab8e8;font-size:0.8rem;"><span>Labor Total (not taxed)</span><span>${fmt(laborTotal)}</span></div>` : ''}`;
+
+  const gv = document.getElementById('grandTotal');
+  gv.textContent = fmt(grand);
+  gv.classList.remove('updated');
+  void gv.offsetWidth;
+  gv.classList.add('updated');
+}
+
+function toggleTaxExempt() {
+  window.taxExemptActive = !window.taxExemptActive;
+  const btn = document.getElementById('taxExemptBtn');
+  if (window.taxExemptActive) {
+    btn.textContent = '✓ Tax Exempt';
+    btn.style.cssText += 'background:rgba(255,255,255,0.1);border-color:var(--accent);color:var(--accent);';
+  } else {
+    btn.textContent = '○ Not Exempt';
+    btn.style.cssText += 'background:var(--surface2);border-color:var(--border);color:var(--muted);';
+  }
+  calculate();
+}
+
+// ─────────────────────────────────────────────────
+// INVOICE — LINE ITEMS
+// ─────────────────────────────────────────────────
+function addInvItem(desc='', qty=1, price=0) {
+  invItems.push({ id: uid(), desc, qty, price });
+  renderInvItems();
+  calcInvoice();
+}
+function removeInvItem(id) { invItems = invItems.filter(x => x.id !== id); renderInvItems(); calcInvoice(); }
+function renderInvItems() {
+  const list = document.getElementById('invItemsList');
+  list.innerHTML = '';
+  invItems.forEach((item, i) => {
+    const total = (parseFloat(item.qty)||0) * (parseFloat(item.price)||0);
+    const row = document.createElement('div');
+    row.className = 'inv-item-row';
+    row.innerHTML = `
+      <input type="text" placeholder="Description" value="${item.desc}"
+        oninput="invItems[${i}].desc=this.value">
+      <input type="number" placeholder="1" min="0" step="0.01" value="${item.qty}"
+        oninput="invItems[${i}].qty=this.value;calcInvoice();renderInvItems()">
+      <input type="number" placeholder="0.00" min="0" step="0.01" value="${item.price}"
+        oninput="invItems[${i}].price=this.value;calcInvoice();renderInvItems()">
+      <div class="inv-line-total">${fmt(total)}</div>
+      <button class="btn-remove" onclick="removeInvItem('${item.id}')">✕</button>`;
+    list.appendChild(row);
+  });
+}
+
+// ─────────────────────────────────────────────────
+// INVOICE — PAYMENTS
+// ─────────────────────────────────────────────────
+function addPayment() {
+  payments.push({ id: uid(), date: '', amount: '', note: '' });
+  renderPayments();
+  calcInvoice();
+}
+function removePayment(id) { payments = payments.filter(p => p.id !== id); renderPayments(); calcInvoice(); }
+function renderPayments() {
+  const list = document.getElementById('paymentsList');
+  list.innerHTML = '';
+  payments.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'payment-row';
+    row.innerHTML = `
+      <input type="date" value="${p.date}" oninput="payments[${i}].date=this.value" style="max-width:150px;">
+      <input type="number" placeholder="$0.00" min="0" step="0.01" value="${p.amount}"
+        oninput="payments[${i}].amount=this.value;calcInvoice()" style="max-width:110px;">
+      <input type="text" class="payment-note" placeholder="Note (e.g. Deposit, Check #1234)" value="${p.note}"
+        oninput="payments[${i}].note=this.value">
+      <button class="btn-remove" onclick="removePayment('${p.id}')">✕</button>`;
+    list.appendChild(row);
+  });
+}
+function totalPayments() { return payments.reduce((s,p) => s+(parseFloat(p.amount)||0), 0); }
+
+// ─────────────────────────────────────────────────
+// INVOICE — STATUS
+// ─────────────────────────────────────────────────
+function setInvStatus(status) {
+  invStatus = status;
+  document.querySelectorAll('.status-badge').forEach(b => {
+    b.classList.toggle('active-status', b.dataset.status === status);
+  });
+}
+
+// ─────────────────────────────────────────────────
+// INVOICE — TAX EXEMPT
+// ─────────────────────────────────────────────────
+function toggleInvTaxExempt() {
+  invTaxExemptActive = !invTaxExemptActive;
+  const btn = document.getElementById('invTaxExemptBtn');
+  if (invTaxExemptActive) {
+    btn.textContent = '✓ Tax Exempt';
+    btn.style.cssText += 'background:rgba(232,194,122,0.1);border-color:var(--invoice-accent);color:var(--invoice-accent);';
+  } else {
+    btn.textContent = '○ Not Exempt';
+    btn.style.cssText += 'background:var(--surface2);border-color:var(--border);color:var(--muted);';
+  }
+  calcInvoice();
+}
+
+// ─────────────────────────────────────────────────
+// INVOICE — IMPORT FROM BID
+// ─────────────────────────────────────────────────
+function importFromBid() {
+  invItems = [];
+  // Import each piece as its own line item
+  pieces.filter(p=>parseFloat(p.w)&&parseFloat(p.h)).forEach(p => {
+    const qty=parseFloat(p.qty)||1;
+    const sqftP=(parseFloat(p.w)*parseFloat(p.h)/144*qty);
+    const dim=(qty>1?qty+'× ':'')+parseFloat(p.w)+'x'+parseFloat(p.h)+'"';
+    const gparts=[p.thickness?p.thickness+'"':'',p.glassType].filter(Boolean).join(' · ');
+    const desc='Glass — '+dim+(gparts?' · '+gparts:'');
+    invItems.push({ id: uid(), desc, qty: parseFloat(sqftP.toFixed(3)), price: parseFloat(p.rate)||0 });
+  });
+  pieces.filter(p=>getPieceEdgeTotal(p)>0).forEach(p => {
+    invItems.push({ id: uid(), desc: (p.edgeName||'Edging')+' – '+getPieceDisplay(p), qty: 1, price: getPieceEdgeTotal(p) });
+  });
+  hardware.forEach(h => {
+    if (parseFloat(h.cost)>0) invItems.push({ id: uid(), desc: h.name||'Hardware', qty: 1, price: parseFloat(h.cost)||0 });
+  });
+  const base = totalGlass() + totalHardware() + totalEdging();
+  extras.forEach(e => {
+    const v=parseFloat(e.value)||0, amt=e.type==='%'?base*(v/100):v;
+    if (amt>0) invItems.push({ id: uid(), desc: e.name||'Additional Cost', qty: 1, price: amt });
+  });
+  // Import labor items
+  labor.forEach(l => {
+    if (parseFloat(l.cost)>0) invItems.push({ id: uid(), desc: (l.name||'Labor')+' (tax-free)', qty: 1, price: parseFloat(l.cost)||0 });
+  });
+  // Sync customer/job info
+  const cname = document.getElementById('customerName').value;
+  const jdesc = document.getElementById('jobDesc').value;
+  if (cname) document.getElementById('invCustomer').value = cname;
+  if (jdesc) document.getElementById('invJobDesc').value  = jdesc;
+  // Sync tax exempt
+  invTaxExemptActive = window.taxExemptActive || false;
+  const btn = document.getElementById('invTaxExemptBtn');
+  if (invTaxExemptActive) {
+    btn.textContent = '✓ Tax Exempt';
+    btn.style.cssText += 'background:rgba(232,194,122,0.1);border-color:var(--invoice-accent);color:var(--invoice-accent);';
+  }
+  renderInvItems();
+  calcInvoice();
+}
+
+// ─────────────────────────────────────────────────
+// INVOICE — CALCULATE
+// ─────────────────────────────────────────────────
+function calcInvoice() {
+  const subtotal = invItems.reduce((s,item) => s+(parseFloat(item.qty)||0)*(parseFloat(item.price)||0), 0);
+  const taxRate  = invTaxExemptActive ? 0 : 9.1;
+  const taxAmt   = subtotal * (taxRate/100);
+  const grand    = subtotal + taxAmt;
+  const paid     = totalPayments();
+  const balance  = grand - paid;
+
+  const itemLines = invItems.map(item => {
+    const total = (parseFloat(item.qty)||0)*(parseFloat(item.price)||0);
+    return `<div class="line-item"><span>${item.desc||'Line Item'}</span><span>${fmt(total)}</span></div>`;
+  }).join('');
+
+  const deposit = grand * 0.5;
+  document.getElementById('invBreakdown').innerHTML = `
+    ${itemLines}
+    <div class="divider"></div>
+    <div class="line-item"><span>Subtotal</span><span>${fmt(subtotal)}</span></div>
+    <div class="line-item"><span>${invTaxExemptActive?'Tax Exempt':'Tax (9.10%)'}</span><span>${invTaxExemptActive?'—':fmt(taxAmt)}</span></div>
+    <div class="divider"></div>
+    <div class="line-item" style="color:var(--invoice-accent);"><span>50% Deposit Required</span><span>${fmt(deposit)}</span></div>
+    ${paid > 0 ? `<div class="line-item" style="color:var(--green)"><span>Payments Received</span><span>− ${fmt(paid)}</span></div>` : ''}`;
+
+  document.getElementById('invGrandTotal').textContent = fmt(grand);
+  document.getElementById('balanceDue').textContent = fmt(Math.max(0, balance));
+  document.getElementById('balanceDue').className = 'balance-value' + (balance <= 0 && paid > 0 ? ' paid-off' : '');
+  document.getElementById('balanceSub').textContent = paid > 0 ? `${fmt(paid)} received` : 'After payments';
+}
+
+// ─────────────────────────────────────────────────
+// INVOICE — DUE DATE FROM TERMS
+// ─────────────────────────────────────────────────
+function updateDueFromTerms() {
+  const terms = document.getElementById('invTerms').value;
+  if (terms === 'custom') return;
+  if (terms === 'completed') {
+    document.getElementById('invDueDate').value = '';
+    document.getElementById('invDueDate').placeholder = 'Upon completion';
+    return;
+  }
+  document.getElementById('invDueDate').placeholder = '';
+  const days = parseInt(terms);
+  const base = document.getElementById('invDate').value || new Date().toISOString().split('T')[0];
+  const d = new Date(base + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  document.getElementById('invDueDate').value = d.toISOString().split('T')[0];
+}
+
+// ─────────────────────────────────────────────────
+// RESET
+// ─────────────────────────────────────────────────
+function resetBid() {
+  if (!confirm('Start a new bid? This will clear everything.')) return;
+  pieces=[]; hardware=[]; labor=[]; extras=[]; invItems=[]; payments=[];
+  invStatus='draft'; invTaxExemptActive=false;
+  ['customerName','jobDesc','jobLocation','pricePerSqft','glassThickness','glassType','bidNotes',
+   'invCustomer','invCompany','invAddress','invCityState','invContact',
+   'invJobDesc','invJobAddress','invPO','invNotes','invPayInstructions','invNumber'].forEach(id => {
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('bidDate').valueAsDate = new Date();
+  document.getElementById('invDate').valueAsDate  = new Date();
+  window.taxExemptActive = false;
+  document.getElementById('taxExemptBtn').textContent = '○ Not Exempt';
+  document.getElementById('taxExemptBtn').style.cssText='background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-family:DM Mono,monospace;font-size:0.8rem;padding:0.6rem 0.85rem;text-align:left;';
+  document.getElementById('invTaxExemptBtn').textContent = '○ Not Exempt';
+  setInvStatus('draft');
+  renderHardware(); renderLabor(); renderExtras(); renderInvItems(); renderPayments();
+  addPiece(); calculate(); calcInvoice();
+}
+
+// ─────────────────────────────────────────────────
+// PDF SHARED HELPERS
+// ─────────────────────────────────────────────────
+const LOGO_B64 = 'logo.png';
+
+function pdfHeader(doc, title, subtitle, date) {
+  const pageW = doc.internal.pageSize.getWidth();
+  doc.setFillColor(20,20,20);
+  doc.rect(0, 0, pageW, 90, 'F');
+  doc.addImage(LOGO_B64, 'PNG', 8, 4, 82, 82);
+  doc.setFontSize(22); doc.setFont('helvetica','bold');
+  doc.setTextColor(255,255,255);
+  doc.text('AMERICAN LEGACY GLASS', 100, 36);
+  doc.setFontSize(8); doc.setFont('helvetica','normal');
+  doc.setTextColor(160,160,160);
+  doc.text(subtitle, 100, 52);
+  doc.text(date, pageW-50, 52, {align:'right'});
+  return 90;
+}
+
+// ─────────────────────────────────────────────────
+// BID PDF
+// ─────────────────────────────────────────────────
+function saveBidPDF() {
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit:'pt', format:'letter' });
+    const taxExempt=window.taxExemptActive||false, taxRate=taxExempt?0:9.1;
+    const glassTotal=totalGlass();
+    const hwTotal=totalHardware(), edgeTotal=totalEdging(), laborTotal=totalLabor();
+    const taxableBase=glassTotal+hwTotal+edgeTotal;
+    const extTotal=totalExtras(taxableBase), taxableTotal=taxableBase+extTotal;
+    const taxAmt=taxableTotal*(taxRate/100), grand=taxableTotal+taxAmt+laborTotal;
+    const pageW=doc.internal.pageSize.getWidth(), M=50, R=pageW-M;
+    const bidDateVal=document.getElementById('bidDate').value;
+    const displayDate=bidDateVal?new Date(bidDateVal+'T00:00:00').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}):new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+
+    let y = pdfHeader(doc, 'BID ESTIMATE', 'BID ESTIMATE  —  Serving Arizona Since 1988', displayDate);
+
+    // Customer bar
+    const cname=document.getElementById('customerName').value.trim();
+    const jdesc=document.getElementById('jobDesc').value.trim();
+    const jloc =document.getElementById('jobLocation').value.trim();
+    const infoBarH = jloc ? 40 : 30;
+    doc.setFillColor(235,238,242); doc.rect(0,90,pageW,infoBarH,'F');
+    doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(40,40,40);
+    if(cname) doc.text('Customer: '+cname, M, 106);
+    if(jdesc) doc.text('Job: '+jdesc, pageW/2, 106, {align:'center'});
+    if(jloc){ doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80); doc.text('Location: '+jloc, M, 120); }
+    y = 90 + infoBarH + 15;
+
+    function gray(v){doc.setTextColor(v,v,v);}
+    function drawColor(v){doc.setDrawColor(v,v,v);}
+    function fillColor(v){doc.setFillColor(v,v,v);}
+    function sectionLabel(text){
+      doc.setFontSize(7);doc.setFont('helvetica','bold');gray(130);
+      doc.text(text.toUpperCase(),M,y);
+      drawColor(200);doc.setLineWidth(0.5);doc.line(M,y+3,R,y+3);y+=16;
+    }
+    function row(left,right,size,weight){
+      size=size||10;weight=weight||'normal';
+      doc.setFontSize(size);doc.setFont('helvetica',weight);
+      gray(80);doc.text(left,M,y);
+      gray(20);doc.setFont('helvetica',weight);doc.text(right,R,y,{align:'right'});
+      y+=size*1.8;
+    }
+    function divider(){drawColor(180);doc.setLineWidth(0.75);doc.line(M,y,R,y);y+=14;}
+
+    sectionLabel('Glass');
+    pieces.filter(p=>parseFloat(p.w)&&parseFloat(p.h)).forEach(p=>{
+      const qty=parseFloat(p.qty)||1;
+      const sqftP=(parseFloat(p.w)*parseFloat(p.h)/144*qty);
+      const rate=parseFloat(p.rate)||0;
+      const dim=(qty>1?qty+'x ':'')+parseFloat(p.w)+'x'+parseFloat(p.h)+'"';
+      const gparts=[p.thickness?p.thickness+'"':'',p.glassType].filter(Boolean).join(' · ');
+      const desc=dim+(gparts?' · '+gparts:'')+' — '+sqftP.toFixed(3)+' ft²'+(rate?' @ '+fmt(rate)+'/ft²':'');
+      row(desc, rate?fmt(getPieceGlassTotal(p)):'(no rate)');
+    });
+    if(pieces.filter(p=>parseFloat(p.w)&&parseFloat(p.h)).length===0) row('No dimensions',fmt(0));
+    // Glass subtotal line
+    doc.setFontSize(9);doc.setFont('helvetica','bold');gray(40);
+    doc.text('Glass Total',M,y);doc.text(fmt(glassTotal),R,y,{align:'right'});y+=9*1.8;
+    y+=6;
+    const edgedPieces=pieces.filter(p=>getPieceEdgeTotal(p)>0);
+    if(edgedPieces.length>0){
+      sectionLabel('Glass Edging');
+      edgedPieces.forEach(p=>{
+        const perim=getPiecePerimFt(p),cpf=parseFloat(p.edgeCpf)||0;
+        row((p.edgeName||'Edging')+' – '+getPieceDisplay(p)+' ('+perim.toFixed(2)+' in x '+fmt(cpf)+'/in)',fmt(getPieceEdgeTotal(p)));
+      });y+=6;
+    }
+    sectionLabel('Hardware');
+    if(hardware.length===0)row('No hardware items',fmt(0));
+    else hardware.forEach(h=>row(h.name||'Hardware item',fmt(parseFloat(h.cost)||0)));
+    y+=6;
+    if(extras.length>0){
+      sectionLabel('Additional Costs');
+      extras.forEach(e=>{
+        const v=parseFloat(e.value)||0,amt=e.type==='%'?taxableBase*(v/100):v;
+        row((e.name||'Additional Cost')+(e.type==='%'?' ('+v+'%)':''),fmt(amt));
+      });y+=6;
+    }
+    divider();
+    row('Taxable Subtotal',fmt(taxableTotal));
+    row(taxExempt?'Tax Exempt':'Tax (9.10%)',taxExempt?'—':fmt(taxAmt));
+    if(labor.length>0){
+      y+=4;
+      doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(122,184,232);
+      doc.text('LABOR (NOT TAXED)',M,y);
+      drawColor(180);doc.setLineWidth(0.5);doc.line(M,y+3,R,y+3);y+=14;
+      labor.forEach(l=>{
+        doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(122,184,232);
+        doc.text(l.name||'Labor',M,y);
+        doc.text(fmt(parseFloat(l.cost)||0),R,y,{align:'right'});
+        y+=10*1.8;
+      });
+      doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(80,160,220);
+      doc.text('Labor Total (tax-free)',M,y);doc.text(fmt(laborTotal),R,y,{align:'right'});y+=9*1.8;
+    }
+    y+=10;
+    fillColor(20);doc.roundedRect(M-12,y-12,pageW-(M-12)*2,52,5,5,'F');
+    doc.setFontSize(10);doc.setFont('helvetica','bold');gray(160);doc.text('TOTAL BID',M,y+10);
+    doc.setFontSize(22);gray(255);doc.text(fmt(grand),R,y+12,{align:'right'});
+    y+=62;
+    const deposit=grand*0.5;y+=8;
+    doc.setFontSize(9);doc.setFont('helvetica','bold');gray(60);doc.text('Deposit Required (50%):',M,y);
+    gray(20);doc.text(fmt(deposit),R,y,{align:'right'});y+=18;
+    doc.setDrawColor(180,180,180);doc.setLineWidth(0.5);doc.line(M,y,R,y);y+=10;
+    const bidNotes=document.getElementById('bidNotes').value.trim();
+    if(bidNotes){
+      y+=10;doc.setFontSize(8);doc.setFont('helvetica','bold');gray(80);doc.text('NOTES',M,y);
+      doc.setDrawColor(200,200,200);doc.setLineWidth(0.5);doc.line(M,y+3,R,y+3);y+=14;
+      doc.setFont('helvetica','normal');gray(80);
+      const nl=doc.splitTextToSize(bidNotes,R-M);doc.text(nl,M,y);y+=nl.length*12+10;
+    }
+    // ── Acceptance Signature Block ──
+    y+=20;
+    doc.setFillColor(250,250,250);
+    doc.setDrawColor(210,210,210);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(M-12, y-10, pageW-(M-12)*2, 100, 5, 5, 'FD');
+
+    // Title
+    doc.setFontSize(7.5);doc.setFont('helvetica','bold');gray(80);
+    doc.text('ACCEPTANCE OF ESTIMATE', M, y+4);
+    doc.setDrawColor(180,180,180);doc.setLineWidth(0.4);
+    doc.line(M, y+8, R, y+8);
+    y+=18;
+
+    // Acceptance text
+    doc.setFontSize(8);doc.setFont('helvetica','normal');gray(100);
+    const acceptText = 'By signing below, I authorize American Legacy Glass to proceed with the work described in this estimate at the price quoted. I understand that a 50% deposit is required before work begins.';
+    const acceptLines = doc.splitTextToSize(acceptText, R-M);
+    doc.text(acceptLines, M, y);
+    y+=acceptLines.length*11+14;
+
+    // Signature lines — two columns
+    const col1X = M;
+    const col2X = pageW/2 + 10;
+    const lineW  = (pageW/2) - M - 20;
+
+    // Left: Customer signature
+    doc.setDrawColor(60,60,60);doc.setLineWidth(0.75);
+    doc.line(col1X, y, col1X+lineW, y);
+    doc.setFontSize(7);doc.setFont('helvetica','normal');gray(130);
+    doc.text('Customer Signature', col1X, y+10);
+
+    // Right: Date
+    doc.line(col2X, y, col2X+lineW, y);
+    doc.text('Date', col2X, y+10);
+
+    y+=28;
+
+    // Left: Printed name
+    doc.setDrawColor(60,60,60);doc.setLineWidth(0.75);
+    doc.line(col1X, y, col1X+lineW, y);
+    doc.setFontSize(7);doc.setFont('helvetica','normal');gray(130);
+    doc.text('Printed Name', col1X, y+10);
+
+    // Right: ALG rep
+    doc.line(col2X, y, col2X+lineW, y);
+    doc.text('American Legacy Glass Representative', col2X, y+10);
+
+    y+=30;
+
+    // Footer
+    doc.setFontSize(7.5);doc.setFont('helvetica','normal');gray(170);
+    doc.text('American Legacy Glass  •  americanlegacyglass.com  •  Serving Arizona Since 1988',pageW/2,y,{align:'center'});
+    const blob=doc.output('blob');
+    window.open(URL.createObjectURL(blob),'_blank');
+  } catch(err){alert('PDF error: '+err.message);}
+}
+
+// ─────────────────────────────────────────────────
+// INVOICE PDF
+// ─────────────────────────────────────────────────
+function saveInvoicePDF() {
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit:'pt', format:'letter' });
+    const pageW=doc.internal.pageSize.getWidth(), M=50, R=pageW-M;
+
+    const subtotal=invItems.reduce((s,item)=>s+(parseFloat(item.qty)||0)*(parseFloat(item.price)||0),0);
+    const taxRate=invTaxExemptActive?0:9.1;
+    const taxAmt=subtotal*(taxRate/100), grand=subtotal+taxAmt, paid=totalPayments(), balance=Math.max(0,grand-paid);
+
+    const invNum   = document.getElementById('invNumber').value||'INV-0001';
+    const invDateV = document.getElementById('invDate').value;
+    const dueV     = document.getElementById('invDueDate').value;
+    const invTermsVal = document.getElementById('invTerms').value;
+    const fmtDate  = v => v?new Date(v+'T00:00:00').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}):'';
+    const displayDate = fmtDate(invDateV)||new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+    const dueDateDisplay = invTermsVal==='completed' ? 'Upon Completion' : fmtDate(dueV);
+
+    // Header
+    doc.setFillColor(20,20,20);
+    doc.rect(0,0,pageW,90,'F');
+    doc.addImage(LOGO_B64,'PNG',8,4,82,82);
+    doc.setFontSize(22);doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);
+    doc.text('AMERICAN LEGACY GLASS',100,36);
+    doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(160,160,160);
+    doc.text('INVOICE  —  Serving Arizona Since 1988',100,52);
+    doc.text(displayDate,R,52,{align:'right'});
+
+    // Invoice # / status bar
+    doc.setFillColor(232,194,122);doc.rect(0,90,pageW,28,'F');
+    doc.setFontSize(10);doc.setFont('helvetica','bold');doc.setTextColor(20,20,20);
+    doc.text('INVOICE '+invNum, M, 109);
+    const termsLabel={'completed':'Due: Upon Completion','0':'Due on Receipt','15':'Net 15','30':'Net 30','60':'Net 60','custom':''}[invTermsVal]||'';
+    const statusLabel={'draft':'DRAFT','sent':'SENT','paid':'PAID IN FULL','overdue':'OVERDUE'}[invStatus]||'DRAFT';
+    if(termsLabel){doc.setFontSize(8);doc.setFont('helvetica','normal');doc.text(termsLabel,pageW/2,109,{align:'center'});}
+    doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text(statusLabel, R, 109, {align:'right'});
+
+    // Bill To / Job Info
+    let y=135;
+    function gray(v){doc.setTextColor(v,v,v);}
+    function drawColor(v){doc.setDrawColor(v,v,v);}
+
+    // Two-column info
+    const leftX=M, rightX=pageW/2+10;
+    doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(150,120,60);
+    doc.text('BILL TO',leftX,y);
+    doc.text('JOB DETAILS',rightX,y);
+    y+=12;
+
+    const billLines=[
+      document.getElementById('invCustomer').value,
+      document.getElementById('invCompany').value,
+      document.getElementById('invAddress').value,
+      document.getElementById('invCityState').value,
+      document.getElementById('invContact').value
+    ].filter(Boolean);
+    const jobLines=[
+      document.getElementById('invJobDesc').value,
+      document.getElementById('invJobAddress').value,
+      document.getElementById('invPO').value?'PO #'+document.getElementById('invPO').value:''
+    ].filter(Boolean);
+
+    doc.setFontSize(9);doc.setFont('helvetica','normal');gray(30);
+    billLines.forEach((l,i)=>{doc.text(l,leftX,y+i*13);});
+    jobLines.forEach((l,i)=>{doc.text(l,rightX,y+i*13);});
+
+    // Due date block
+    if(dueV||invTermsVal==='completed'){
+      doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(150,120,60);
+      doc.text('DUE DATE',R,y,{align:'right'});
+      doc.setFontSize(10);doc.setFont('helvetica','bold');gray(20);
+      doc.text(dueDateDisplay,R,y+13,{align:'right'});
+    }
+
+    y+=Math.max(billLines.length,jobLines.length)*13+24;
+
+    // Line items table header
+    doc.setFillColor(232,194,122);
+    doc.rect(M-8,y-10,R-M+16,20,'F');
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(40,20,5);
+    doc.text('DESCRIPTION',M,y+4);
+    doc.text('QTY',M+280,y+4,{align:'right'});
+    doc.text('UNIT PRICE',M+370,y+4,{align:'right'});
+    doc.text('TOTAL',R,y+4,{align:'right'});
+    y+=22;
+
+    // Line item rows
+    invItems.forEach((item,i)=>{
+      if(i%2===0){doc.setFillColor(245,245,240);}else{doc.setFillColor(255,255,255);}
+      doc.rect(M-8,y-10,R-M+16,18,'F');
+      doc.setFontSize(8.5);doc.setFont('helvetica','normal');gray(30);
+      const descLines=doc.splitTextToSize(item.desc||'—', 250);
+      doc.text(descLines[0]||'—',M,y+2);
+      const qty=parseFloat(item.qty)||0, price=parseFloat(item.price)||0;
+      doc.text(qty%1===0?String(qty):qty.toFixed(2),M+280,y+2,{align:'right'});
+      doc.text(fmt(price),M+370,y+2,{align:'right'});
+      doc.text(fmt(qty*price),R,y+2,{align:'right'});
+      y+=18;
+    });
+    y+=12;
+
+    // Totals block (right-aligned)
+    const totW=220, totX=R-totW;
+    function totRow(label,value,bold){
+      doc.setFontSize(9);doc.setFont('helvetica',bold?'bold':'normal');
+      gray(bold?20:80);doc.text(label,totX,y);
+      gray(20);doc.text(value,R,y,{align:'right'});
+      y+=16;
+    }
+    totRow('Subtotal',fmt(subtotal));
+    totRow(invTaxExemptActive?'Tax Exempt':'Tax (9.10%)',invTaxExemptActive?'—':fmt(taxAmt));
+    if(paid>0){
+      doc.setTextColor(50,160,120);
+      doc.setFontSize(9);doc.setFont('helvetica','normal');
+      doc.text('Payments Received',totX,y);
+      doc.text('− '+fmt(paid),R,y,{align:'right'});
+      y+=16;
+    }
+
+    // Grand total box
+    doc.setFillColor(20,20,20);
+    doc.roundedRect(totX-8,y-10,R-totX+16,36,4,4,'F');
+    doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(160,150,100);
+    doc.text('TOTAL DUE',totX,y+8);
+    doc.setFontSize(18);doc.setTextColor(232,194,122);
+    doc.text(fmt(balance),R,y+10,{align:'right'});
+    y+=46;
+
+    // 50% Deposit line
+    const deposit=grand*0.5;
+    doc.setFillColor(250,244,228);
+    doc.roundedRect(totX-8,y-8,R-totX+16,26,3,3,'F');
+    doc.setDrawColor(232,194,122);doc.setLineWidth(0.5);
+    doc.roundedRect(totX-8,y-8,R-totX+16,26,3,3,'S');
+    doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(120,90,30);
+    doc.text('50% DEPOSIT REQUIRED',totX,y+6);
+    doc.setFontSize(13);doc.setTextColor(160,110,20);
+    doc.text(fmt(deposit),R,y+8,{align:'right'});
+    y+=34;
+
+    // Payments list
+    if(payments.length>0){
+      y+=10;
+      doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(120,120,120);
+      doc.text('PAYMENTS RECEIVED',M,y);
+      drawColor(200);doc.setLineWidth(0.5);doc.line(M,y+3,R,y+3);y+=14;
+      payments.forEach(p=>{
+        doc.setFontSize(8.5);doc.setFont('helvetica','normal');gray(60);
+        const dateStr=p.date?fmtDate(p.date):'';
+        doc.text((dateStr?dateStr+' — ':'')+(p.note||'Payment'),M,y);
+        doc.text(fmt(parseFloat(p.amount)||0),R,y,{align:'right'});
+        y+=14;
+      });
+    }
+
+    // Notes & payment instructions
+    const invNotes=document.getElementById('invNotes').value.trim();
+    const payInstr=document.getElementById('invPayInstructions').value.trim();
+    if(invNotes||payInstr){
+      y+=16;
+      doc.setFillColor(250,248,240);
+      doc.roundedRect(M-8,y-8,R-M+16,16+(invNotes?doc.splitTextToSize(invNotes,R-M).length*12:0)+(payInstr?doc.splitTextToSize(payInstr,R-M).length*12+16:0),4,4,'F');
+      y+=6;
+      if(invNotes){
+        doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(150,120,60);
+        doc.text('NOTES',M,y);y+=10;
+        doc.setFontSize(8.5);doc.setFont('helvetica','normal');gray(60);
+        const nl=doc.splitTextToSize(invNotes,R-M);doc.text(nl,M,y);y+=nl.length*12;
+      }
+      if(payInstr){
+        y+=6;
+        doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(150,120,60);
+        doc.text('PAYMENT INSTRUCTIONS',M,y);y+=10;
+        doc.setFontSize(8.5);doc.setFont('helvetica','normal');gray(60);
+        const pl=doc.splitTextToSize(payInstr,R-M);doc.text(pl,M,y);y+=pl.length*12;
+      }
+      y+=12;
+    }
+
+    // Payment Methods block
+    y+=18;
+    const pmBoxY=y-10;
+    // Draw box after we know height — skip fill for now, draw after
+    const pmStartY=y;
+
+    y+=16;
+
+    const payMethods=[
+      {icon:'💵', label:'Cash'},
+      {icon:'✉', label:'Check'},
+      {icon:'💳', label:'Credit Card', note:'3% processing fee applies — a separate payment link will be sent to your email'},
+      {icon:'⚡', label:'Zelle', note:'Zelle Tag: 1americanlegacy'},
+    ];
+    payMethods.forEach((m)=>{
+      doc.setFontSize(9);doc.setFont('helvetica','bold');gray(30);
+      doc.text(m.label,M+4,y);
+      y+=12;
+      if(m.note){
+        doc.setFontSize(7.5);doc.setFont('helvetica','normal');gray(110);
+        const noteLines=doc.splitTextToSize(m.note, R-M-8);
+        doc.text(noteLines,M+4,y);
+        y+=noteLines.length*10;
+      }
+      y+=4;
+    });
+
+    // Draw payment methods box now that we know the height
+    const pmBoxH=y-pmBoxY+10;
+    doc.setFillColor(245,245,245);
+    doc.roundedRect(M-8,pmBoxY,R-M+16,pmBoxH,4,4,'F');
+    doc.setDrawColor(210,210,210);doc.setLineWidth(0.5);
+    doc.roundedRect(M-8,pmBoxY,R-M+16,pmBoxH,4,4,'S');
+    // Redraw header text on top of box
+    doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.setTextColor(100,80,30);
+    doc.text('PAYMENT METHODS ACCEPTED',M,pmBoxY+12);
+    doc.setDrawColor(232,194,122);doc.setLineWidth(0.75);
+    doc.line(M,pmBoxY+16,R,pmBoxY+16);
+    // Redraw each payment method on top of box
+    let ry=pmStartY;
+    payMethods.forEach((m)=>{
+      doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(30,30,30);
+      doc.text(m.label,M+4,ry);
+      ry+=12;
+      if(m.note){
+        doc.setFontSize(7.5);doc.setFont('helvetica','normal');doc.setTextColor(110,110,110);
+        const noteLines=doc.splitTextToSize(m.note, R-M-8);
+        doc.text(noteLines,M+4,ry);
+        ry+=noteLines.length*10;
+      }
+      ry+=4;
+    });
+
+    // Footer
+    y+=14;
+    doc.setFontSize(7.5);doc.setFont('helvetica','normal');doc.setTextColor(170,170,170);
+    doc.text('American Legacy Glass  •  americanlegacyglass.com  •  Serving Arizona Since 1988',pageW/2,y,{align:'center'});
+
+    const blob=doc.output('blob');
+    window.open(URL.createObjectURL(blob),'_blank');
+  } catch(err){alert('PDF error: '+err.message);}
+}
+
+// ─────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────
+addPiece();
+calculate();
+calcInvoice();
+document.getElementById('bidDate').valueAsDate  = new Date();
+document.getElementById('invDate').valueAsDate  = new Date();
+// Auto-set due date Net30
+(function(){
+  const d=new Date(); d.setDate(d.getDate()+30);
+  document.getElementById('invDueDate').valueAsDate=d;
+})();
+// Auto-generate invoice number
+document.getElementById('invNumber').value = 'INV-' + String(Math.floor(Math.random()*9000)+1000);
+</script>
+</body>
+</html>
