@@ -405,7 +405,7 @@ function renderQuizView(id){
   });
 
   if (!quizState.submitted){
-    html += `<button class="btn" id="submitQuizBtn">Submit answers</button>`;
+    html += `<button class="btn" id="submitQuizBtn">Submit answers</button> <button class="btn ghost" id="backToLessonBtn">← Back to passage</button>`;
   } else {
     const score = quizState.answers.filter((a, i) => a === lesson.quiz[i].correct).length;
     const total = lesson.quiz.length;
@@ -429,6 +429,10 @@ function renderQuizView(id){
     const submitBtn = document.getElementById('submitQuizBtn');
     submitBtn.disabled = quizState.answers.includes(null);
     submitBtn.addEventListener('click', () => submitQuiz(id));
+    document.getElementById('backToLessonBtn').addEventListener('click', () => {
+      quizState = null;
+      renderLessonView(id);
+    });
   } else {
     document.getElementById('retryQuizBtn').addEventListener('click', () => startQuiz(id));
     document.getElementById('nextBtn').addEventListener('click', () => goToNext());
