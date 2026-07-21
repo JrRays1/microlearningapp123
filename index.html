@@ -98,6 +98,15 @@
   .panel::-webkit-scrollbar-track{background:transparent;}
   .panel::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
   .panel::-webkit-scrollbar-thumb:hover{background:var(--gold-dim);}
+
+  .track-toggle{display:flex; gap:8px; max-width:720px; margin:0 auto 20px;}
+  .track-btn{
+    flex:1; font-family:'IBM Plex Mono',monospace; font-size:12px; text-transform:uppercase; letter-spacing:0.04em;
+    background:var(--panel); color:var(--muted); border:1px solid var(--line); padding:12px 10px; border-radius:4px;
+    cursor:pointer; font-weight:600; text-align:center;
+  }
+  .track-btn:hover{border-color:var(--gold-dim); color:var(--white);}
+  .track-btn.active{background:var(--gold); color:var(--ink); border-color:var(--gold);}
 </style>
 </head>
 <body>
@@ -105,7 +114,7 @@
   <header class="top">
     <div>
       <div class="brand">Ledger<span>.</span></div>
-      <div class="tagline">CMA · Finance · Business — micro-lessons</div>
+      <div class="tagline" id="tagline">CMA · Finance · Business — micro-lessons</div>
     </div>
     <div class="stats">
       <div class="stat"><div class="n" id="statStreak">0</div><div class="l">Day Streak</div></div>
@@ -113,6 +122,11 @@
       <div class="stat"><div class="n" id="statAvg">—</div><div class="l">Avg Score</div></div>
     </div>
   </header>
+
+  <div class="track-toggle" id="trackToggle" style="display:none;">
+    <button class="track-btn active" data-track="cma" id="trackBtnCma">CMA · Finance · Business</button>
+    <button class="track-btn" data-track="mind" id="trackBtnMind">Philosophy & Psychology</button>
+  </div>
 
   <div class="board" id="appBoard" style="display:none;">
     <div class="panel" id="mainPanel">
@@ -158,10 +172,12 @@ let firebaseConfigured = true;
 function showLogin(){
   document.getElementById('loginScreen').style.display = 'block';
   document.getElementById('appBoard').style.display = 'none';
+  document.getElementById('trackToggle').style.display = 'none';
 }
 function showApp(){
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appBoard').style.display = 'block';
+  document.getElementById('trackToggle').style.display = 'flex';
 }
 
 try {
@@ -191,6 +207,8 @@ try {
 
 document.getElementById('loginBtn').addEventListener('click', doLogin);
 document.getElementById('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('trackBtnCma').addEventListener('click', () => switchTrack('cma'));
+document.getElementById('trackBtnMind').addEventListener('click', () => switchTrack('mind'));
 
 function doLogin(){
   const pw = document.getElementById('loginPassword').value;
@@ -209,10 +227,18 @@ function doLogin(){
 
 // ---------------- LESSON CONTENT ----------------
 // Lessons now live in Firestore's "lessons" collection (uploaded via upload-lessons.mjs).
-// This starts empty and is populated by fetchLessons() after sign-in.
+// Each lesson has a "track" field ("cma" or "mind") deciding which side it belongs to.
+const TRACKS = [
+  { id: 'cma', label: 'CMA · Finance · Business' },
+  { id: 'mind', label: 'Philosophy & Psychology' }
+];
+let ALL_LESSONS = []; // every lesson fetched, unfiltered
+let currentTrack = 'cma';
+
+// Per-track working data, rebuilt whenever the active track changes.
 let LESSONS = [];
-let SUBJECTS = {}; // { "CMA": [lesson, lesson, ...], "Finance": [...], "Business": [...] }
-let SUBJECT_ORDER = []; // ["CMA","Finance","Business"] in first-seen order
+let SUBJECTS = {};
+let SUBJECT_ORDER = [];
 
 function subjectOf(lesson){
   // category looks like "CMA · Cost Management" — subject is the part before " · "
@@ -224,21 +250,44 @@ async function fetchLessons(){
   panel.innerHTML = '<div class="loading">Loading lessons…</div>';
   try {
     const snap = await getDocs(collection(db, 'lessons'));
-    LESSONS = [];
-    snap.forEach(d => LESSONS.push(d.data()));
-    LESSONS.sort((a,b) => (a.category+a.title).localeCompare(b.category+b.title));
-
-    SUBJECTS = {};
-    SUBJECT_ORDER = [];
-    LESSONS.forEach(lesson => {
-      const subj = subjectOf(lesson);
-      if (!SUBJECTS[subj]){ SUBJECTS[subj] = []; SUBJECT_ORDER.push(subj); }
-      SUBJECTS[subj].push(lesson);
-    });
+    ALL_LESSONS = [];
+    snap.forEach(d => ALL_LESSONS.push(d.data()));
+    ALL_LESSONS.sort((a,b) => (a.category+a.title).localeCompare(b.category+b.title));
+    rebuildTrackData(currentTrack);
   } catch (err) {
     panel.innerHTML = '<div class="loading">Could not load lessons — check your connection.</div>';
     console.error(err);
   }
+}
+
+function rebuildTrackData(trackId){
+  // Lessons uploaded before the track field existed default to "cma".
+  LESSONS = ALL_LESSONS.filter(l => (l.track || 'cma') === trackId);
+  SUBJECTS = {};
+  SUBJECT_ORDER = [];
+  LESSONS.forEach(lesson => {
+    const subj = subjectOf(lesson);
+    if (!SUBJECTS[subj]){ SUBJECTS[subj] = []; SUBJECT_ORDER.push(subj); }
+    SUBJECTS[subj].push(lesson);
+  });
+}
+
+function setActiveTrackButton(trackId){
+  document.getElementById('trackBtnCma').classList.toggle('active', trackId === 'cma');
+  document.getElementById('trackBtnMind').classList.toggle('active', trackId === 'mind');
+  const track = TRACKS.find(t => t.id === trackId);
+  document.getElementById('tagline').textContent = `${track.label} — micro-lessons`;
+}
+
+async function switchTrack(trackId){
+  if (trackId === currentTrack) return;
+  currentTrack = trackId;
+  localStorage.setItem(TRACK_LOCAL_KEY, trackId);
+  setActiveTrackButton(trackId);
+  rebuildTrackData(trackId);
+  cycle = cycles[trackId];
+  renderStats();
+  renderCurrentLesson();
 }
 
 // ---------------- STATE ----------------
@@ -247,40 +296,59 @@ let quizState = null; // { answers: [], submitted: bool }
 
 // Cycle state: which subject's turn is next, and how far through each subject's list we are.
 // { subjectTurn: 0, pointers: { CMA: 0, Finance: 0, Business: 0 } }
-let cycle = { subjectTurn: 0, pointers: {} };
+let cycles = {
+  cma: { subjectTurn: 0, pointers: {} },
+  mind: { subjectTurn: 0, pointers: {} }
+};
+let cycle = cycles.cma; // alias to the active track's cycle object
 let currentLessonId = null;
 
 const LOCAL_KEY = 'ledger_progress_v1';
-const CYCLE_LOCAL_KEY = 'ledger_cycle_v1';
+const CYCLE_LOCAL_KEY_PREFIX = 'ledger_cycle_v1_';
+const TRACK_LOCAL_KEY = 'ledger_track_v1';
 
 async function loadProgressAndRender(){
+  currentTrack = localStorage.getItem(TRACK_LOCAL_KEY) || 'cma';
+
   if (firebaseReady && uid){
     const snap = await getDocs(collection(db, 'users', uid, 'progress'));
     progress = {};
     snap.forEach(d => progress[d.id] = d.data());
 
-    try {
-      const cycleSnap = await getDoc(doc(db, 'users', uid, 'meta', 'cycle'));
-      if (cycleSnap.exists()) cycle = cycleSnap.data();
-    } catch(e){ /* no cycle doc yet — defaults stand */ }
+    for (const track of TRACKS){
+      try {
+        const cycleSnap = await getDoc(doc(db, 'users', uid, 'meta', 'cycle_' + track.id));
+        if (cycleSnap.exists()) cycles[track.id] = cycleSnap.data();
+      } catch(e){ /* no cycle doc yet for this track — defaults stand */ }
+    }
   } else {
     try{ progress = JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}'); } catch(e){ progress = {}; }
-    try{ cycle = JSON.parse(localStorage.getItem(CYCLE_LOCAL_KEY) || '') || cycle; } catch(e){ /* defaults stand */ }
+    for (const track of TRACKS){
+      try{
+        const stored = JSON.parse(localStorage.getItem(CYCLE_LOCAL_KEY_PREFIX + track.id) || '');
+        if (stored) cycles[track.id] = stored;
+      } catch(e){ /* defaults stand */ }
+    }
   }
+
+  cycle = cycles[currentTrack];
+  rebuildTrackData(currentTrack);
+  setActiveTrackButton(currentTrack);
   renderStats();
   renderCurrentLesson();
 }
 
 async function saveCycle(){
+  cycles[currentTrack] = cycle; // keep the map in sync with the active alias
   if (firebaseReady && uid){
     try {
-      await setDoc(doc(db, 'users', uid, 'meta', 'cycle'), cycle);
+      await setDoc(doc(db, 'users', uid, 'meta', 'cycle_' + currentTrack), cycle);
     } catch (err) {
       console.error('Could not save cycle position to Firestore, falling back to local storage:', err);
-      localStorage.setItem(CYCLE_LOCAL_KEY, JSON.stringify(cycle));
+      localStorage.setItem(CYCLE_LOCAL_KEY_PREFIX + currentTrack, JSON.stringify(cycle));
     }
   } else {
-    localStorage.setItem(CYCLE_LOCAL_KEY, JSON.stringify(cycle));
+    localStorage.setItem(CYCLE_LOCAL_KEY_PREFIX + currentTrack, JSON.stringify(cycle));
   }
 }
 
@@ -296,7 +364,10 @@ async function saveProgress(lessonId, data){
 
 function renderStats(){
   const total = LESSONS.length;
-  const doneEntries = Object.values(progress).filter(p => p.completed);
+  const trackLessonIds = new Set(LESSONS.map(l => l.id));
+  const doneEntries = Object.entries(progress)
+    .filter(([id, p]) => trackLessonIds.has(id) && p.completed)
+    .map(([id, p]) => p);
   const done = doneEntries.length;
   document.getElementById('statDone').textContent = `${done}/${total}`;
 
@@ -307,8 +378,9 @@ function renderStats(){
     document.getElementById('statAvg').textContent = '—';
   }
 
-  // streak: consecutive days with at least one completion, counting back from today
-  const dates = new Set(doneEntries.map(p => p.lastDate));
+  // streak: consecutive days with at least one completion in EITHER track, counting back from today
+  const allDoneEntries = Object.values(progress).filter(p => p.completed);
+  const dates = new Set(allDoneEntries.map(p => p.lastDate));
   let streak = 0;
   let d = new Date();
   while (true){
@@ -348,7 +420,8 @@ function renderCurrentLesson(){
   quizState = null;
   const lesson = getCurrentLesson();
   if (!lesson){
-    document.getElementById('mainPanel').innerHTML = `<div class="empty">No lessons loaded yet.</div>`;
+    const track = TRACKS.find(t => t.id === currentTrack);
+    document.getElementById('mainPanel').innerHTML = `<div class="empty">No lessons yet on the ${track.label} side. Add some and re-run the upload script.</div>`;
     return;
   }
   currentLessonId = lesson.id;
