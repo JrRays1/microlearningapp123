@@ -431,14 +431,7 @@ function renderQuizView(id){
     submitBtn.addEventListener('click', () => submitQuiz(id));
   } else {
     document.getElementById('retryQuizBtn').addEventListener('click', () => startQuiz(id));
-    document.getElementById('nextBtn').addEventListener('click', async () => {
-      try {
-        await advanceCycle();
-      } catch (err) {
-        console.error('advanceCycle failed, continuing anyway:', err);
-      }
-      renderCurrentLesson();
-    });
+    document.getElementById('nextBtn').addEventListener('click', () => goToNext());
   }
 }
 
@@ -449,7 +442,109 @@ async function submitQuiz(id){
   const total = lesson.quiz.length;
   const today = new Date().toISOString().slice(0,10);
   await saveProgress(id, { completed: score/total >= 0.7, score, total, lastDate: today });
+
+  if (!cycle.completedOrder) cycle.completedOrder = [];
+  cycle.completedOrder.push(id);
+  await saveCycle();
+
   renderQuizView(id);
+}
+
+// ---------------- CHECKPOINT (every 5 completions) ----------------
+let checkpointState = null; // { questions: [...], answers: [], submitted: bool }
+
+function checkpointDue(){
+  const count = (cycle.completedOrder || []).length;
+  const seen = cycle.checkpointsSeen || 0;
+  return Math.floor(count / 5) > seen;
+}
+
+function goToNext(){
+  if (checkpointDue()){
+    startCheckpoint();
+  } else {
+    advanceAndRenderNext();
+  }
+}
+
+async function advanceAndRenderNext(){
+  try {
+    await advanceCycle();
+  } catch (err) {
+    console.error('advanceCycle failed, continuing anyway:', err);
+  }
+  renderCurrentLesson();
+}
+
+function startCheckpoint(){
+  const last5Ids = cycle.completedOrder.slice(-5);
+  const questions = last5Ids
+    .map(id => LESSONS.find(l => l.id === id))
+    .filter(l => l && l.checkpoint)
+    .map(l => ({ ...l.checkpoint, sourceTitle: l.title }));
+  checkpointState = { questions, answers: new Array(questions.length).fill(null), submitted: false };
+  renderCheckpointView();
+}
+
+function renderCheckpointView(){
+  const panel = document.getElementById('mainPanel');
+  let html = `
+    <div class="subject-pill" style="background:var(--green); color:var(--ink);">Checkpoint review</div>
+    <div class="lesson-title">Mixed review — last 5 lessons</div>
+    <div class="lesson-body"><p>Quick check across what you've just covered, mixed together. This isn't a repeat of the lesson quizzes — it applies the concepts.</p></div>
+  `;
+  checkpointState.questions.forEach((q, qi) => {
+    html += `<div class="quiz-q"><div class="qtext">${qi+1}. (${q.sourceTitle}) ${q.q}</div>`;
+    q.options.forEach((opt, oi) => {
+      let cls = 'opt';
+      if (checkpointState.submitted){
+        cls += ' disabled';
+        if (oi === q.correct) cls += ' correct';
+        else if (checkpointState.answers[qi] === oi) cls += ' wrong';
+      } else if (checkpointState.answers[qi] === oi){
+        cls += ' selected';
+      }
+      html += `<div class="${cls}" data-qi="${qi}" data-oi="${oi}">${opt}</div>`;
+    });
+    html += `</div>`;
+  });
+
+  if (!checkpointState.submitted){
+    html += `<button class="btn" id="submitCheckpointBtn">Submit review</button>`;
+  } else {
+    const score = checkpointState.answers.filter((a,i) => a === checkpointState.questions[i].correct).length;
+    const total = checkpointState.questions.length;
+    const pct = total ? Math.round(score/total*100) : 0;
+    const pass = pct >= 70;
+    html = `<div class="result-banner ${pass ? 'pass' : 'fail'}">${score}/${total} correct (${pct}%) on this checkpoint.</div>` + html;
+    html += `<button class="btn" id="checkpointContinueBtn">Continue →</button>`;
+  }
+
+  panel.innerHTML = html;
+
+  if (!checkpointState.submitted){
+    panel.querySelectorAll('.opt').forEach(el => {
+      el.addEventListener('click', () => {
+        const qi = parseInt(el.dataset.qi);
+        const oi = parseInt(el.dataset.oi);
+        checkpointState.answers[qi] = oi;
+        renderCheckpointView();
+      });
+    });
+    const submitBtn = document.getElementById('submitCheckpointBtn');
+    submitBtn.disabled = checkpointState.answers.includes(null);
+    submitBtn.addEventListener('click', () => {
+      checkpointState.submitted = true;
+      renderCheckpointView();
+    });
+  } else {
+    document.getElementById('checkpointContinueBtn').addEventListener('click', async () => {
+      cycle.checkpointsSeen = Math.floor((cycle.completedOrder || []).length / 5);
+      await saveCycle();
+      checkpointState = null;
+      await advanceAndRenderNext();
+    });
+  }
 }
 
 // initial paint happens once auth resolves and lessons are fetched
