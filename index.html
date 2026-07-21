@@ -273,7 +273,12 @@ async function loadProgressAndRender(){
 
 async function saveCycle(){
   if (firebaseReady && uid){
-    await setDoc(doc(db, 'users', uid, 'meta', 'cycle'), cycle);
+    try {
+      await setDoc(doc(db, 'users', uid, 'meta', 'cycle'), cycle);
+    } catch (err) {
+      console.error('Could not save cycle position to Firestore, falling back to local storage:', err);
+      localStorage.setItem(CYCLE_LOCAL_KEY, JSON.stringify(cycle));
+    }
   } else {
     localStorage.setItem(CYCLE_LOCAL_KEY, JSON.stringify(cycle));
   }
@@ -427,7 +432,11 @@ function renderQuizView(id){
   } else {
     document.getElementById('retryQuizBtn').addEventListener('click', () => startQuiz(id));
     document.getElementById('nextBtn').addEventListener('click', async () => {
-      await advanceCycle();
+      try {
+        await advanceCycle();
+      } catch (err) {
+        console.error('advanceCycle failed, continuing anyway:', err);
+      }
       renderCurrentLesson();
     });
   }
