@@ -45,30 +45,15 @@
   .stat .n{font-size:22px; color:var(--gold); font-weight:600;}
   .stat .l{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em;}
 
-  .board{display:grid; grid-template-columns:280px 1fr; gap:24px; height:calc(100vh - 220px); min-height:400px;}
-  @media (max-width:760px){ .board{grid-template-columns:1fr; height:auto;} .panel{height:auto; overflow-y:visible;} }
+  .board{max-width:720px; margin:0 auto; height:calc(100vh - 220px); min-height:400px;}
+  @media (max-width:760px){ .board{height:auto;} .panel{height:auto; overflow-y:visible;} }
 
-  .ledger-list{border-right:1px solid var(--line); padding-right:20px; overflow-y:auto; height:100%;}
-  @media (max-width:760px){ .ledger-list{border-right:none; border-bottom:1px solid var(--line); padding-right:0; padding-bottom:20px; overflow-y:visible; height:auto; max-height:300px;} }
-
-  .cat-label{font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--gold-dim); margin:18px 0 8px; }
-  .cat-label:first-child{margin-top:0;}
-
-  .entry{
-    display:flex; align-items:center; gap:10px;
-    padding:10px 8px; border-radius:4px; cursor:pointer;
-    border-left:2px solid transparent;
-    font-size:14px;
+  .subject-pill{
+    display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase;
+    letter-spacing:0.08em; color:var(--ink); background:var(--gold); padding:4px 10px; border-radius:20px;
+    margin-bottom:14px; font-weight:600;
   }
-  .entry:hover{background:var(--panel);}
-  .entry.active{background:var(--panel-2); border-left:2px solid var(--gold);}
-  .entry .dot{
-    width:8px; height:8px; border-radius:50%; flex-shrink:0;
-    border:1.5px solid var(--muted);
-  }
-  .entry.done .dot{background:var(--green); border-color:var(--green);}
-  .entry .title{flex:1; color:var(--white);}
-  .entry .score{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--gold);}
+  .progress-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);}
 
   .panel{background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:32px; height:100%; overflow-y:auto;}
   .lesson-cat{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--gold); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px;}
@@ -109,10 +94,10 @@
   .loading{color:var(--muted); font-family:'IBM Plex Mono',monospace; font-size:12px;}
   .footnote{margin-top:24px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);}
 
-  .ledger-list::-webkit-scrollbar, .panel::-webkit-scrollbar{width:8px;}
-  .ledger-list::-webkit-scrollbar-track, .panel::-webkit-scrollbar-track{background:transparent;}
-  .ledger-list::-webkit-scrollbar-thumb, .panel::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
-  .ledger-list::-webkit-scrollbar-thumb:hover, .panel::-webkit-scrollbar-thumb:hover{background:var(--gold-dim);}
+  .panel::-webkit-scrollbar{width:8px;}
+  .panel::-webkit-scrollbar-track{background:transparent;}
+  .panel::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
+  .panel::-webkit-scrollbar-thumb:hover{background:var(--gold-dim);}
 </style>
 </head>
 <body>
@@ -130,11 +115,8 @@
   </header>
 
   <div class="board" id="appBoard" style="display:none;">
-    <div class="ledger-list" id="ledgerList">
-      <div class="loading">Loading lessons…</div>
-    </div>
     <div class="panel" id="mainPanel">
-      <div class="empty">Select a lesson from the ledger to begin.</div>
+      <div class="loading">Loading lessons…</div>
     </div>
   </div>
 
@@ -179,7 +161,7 @@ function showLogin(){
 }
 function showApp(){
   document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('appBoard').style.display = 'grid';
+  document.getElementById('appBoard').style.display = 'block';
 }
 
 try {
@@ -203,7 +185,8 @@ try {
 } catch (e) {
   firebaseConfigured = false;
   document.getElementById('authNote').textContent = 'Firebase is not configured — lessons live in Firestore now, so this app needs it to work.';
-  document.getElementById('ledgerList').innerHTML = '<div class="loading">Lessons unavailable — Firebase not configured.</div>';
+  showApp();
+  document.getElementById('mainPanel').innerHTML = '<div class="loading">Lessons unavailable — Firebase not configured.</div>';
 }
 
 document.getElementById('loginBtn').addEventListener('click', doLogin);
@@ -228,41 +211,72 @@ function doLogin(){
 // Lessons now live in Firestore's "lessons" collection (uploaded via upload-lessons.mjs).
 // This starts empty and is populated by fetchLessons() after sign-in.
 let LESSONS = [];
+let SUBJECTS = {}; // { "CMA": [lesson, lesson, ...], "Finance": [...], "Business": [...] }
+let SUBJECT_ORDER = []; // ["CMA","Finance","Business"] in first-seen order
+
+function subjectOf(lesson){
+  // category looks like "CMA · Cost Management" — subject is the part before " · "
+  return lesson.category.split('·')[0].trim();
+}
 
 async function fetchLessons(){
   const panel = document.getElementById('mainPanel');
-  const listEl = document.getElementById('ledgerList');
-  listEl.innerHTML = '<div class="loading">Loading lessons…</div>';
+  panel.innerHTML = '<div class="loading">Loading lessons…</div>';
   try {
     const snap = await getDocs(collection(db, 'lessons'));
     LESSONS = [];
     snap.forEach(d => LESSONS.push(d.data()));
-    // stable order: category, then title
     LESSONS.sort((a,b) => (a.category+a.title).localeCompare(b.category+b.title));
+
+    SUBJECTS = {};
+    SUBJECT_ORDER = [];
+    LESSONS.forEach(lesson => {
+      const subj = subjectOf(lesson);
+      if (!SUBJECTS[subj]){ SUBJECTS[subj] = []; SUBJECT_ORDER.push(subj); }
+      SUBJECTS[subj].push(lesson);
+    });
   } catch (err) {
-    listEl.innerHTML = '<div class="loading">Could not load lessons — check your connection.</div>';
+    panel.innerHTML = '<div class="loading">Could not load lessons — check your connection.</div>';
     console.error(err);
   }
 }
 
 // ---------------- STATE ----------------
 let progress = {}; // { lessonId: { completed: bool, score: number, total: number, lastDate: 'YYYY-MM-DD' } }
-let activeLessonId = null;
 let quizState = null; // { answers: [], submitted: bool }
 
+// Cycle state: which subject's turn is next, and how far through each subject's list we are.
+// { subjectTurn: 0, pointers: { CMA: 0, Finance: 0, Business: 0 } }
+let cycle = { subjectTurn: 0, pointers: {} };
+let currentLessonId = null;
+
 const LOCAL_KEY = 'ledger_progress_v1';
+const CYCLE_LOCAL_KEY = 'ledger_cycle_v1';
 
 async function loadProgressAndRender(){
   if (firebaseReady && uid){
     const snap = await getDocs(collection(db, 'users', uid, 'progress'));
     progress = {};
     snap.forEach(d => progress[d.id] = d.data());
+
+    try {
+      const cycleSnap = await getDoc(doc(db, 'users', uid, 'meta', 'cycle'));
+      if (cycleSnap.exists()) cycle = cycleSnap.data();
+    } catch(e){ /* no cycle doc yet — defaults stand */ }
   } else {
     try{ progress = JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}'); } catch(e){ progress = {}; }
+    try{ cycle = JSON.parse(localStorage.getItem(CYCLE_LOCAL_KEY) || '') || cycle; } catch(e){ /* defaults stand */ }
   }
-  renderLedger();
   renderStats();
-  if (!activeLessonId) renderEmpty();
+  renderCurrentLesson();
+}
+
+async function saveCycle(){
+  if (firebaseReady && uid){
+    await setDoc(doc(db, 'users', uid, 'meta', 'cycle'), cycle);
+  } else {
+    localStorage.setItem(CYCLE_LOCAL_KEY, JSON.stringify(cycle));
+  }
 }
 
 async function saveProgress(lessonId, data){
@@ -272,7 +286,6 @@ async function saveProgress(lessonId, data){
   } else {
     localStorage.setItem(LOCAL_KEY, JSON.stringify(progress));
   }
-  renderLedger();
   renderStats();
 }
 
@@ -301,47 +314,55 @@ function renderStats(){
   document.getElementById('statStreak').textContent = streak;
 }
 
-function renderLedger(){
-  const list = document.getElementById('ledgerList');
-  list.innerHTML = '';
-  let lastCat = null;
-  LESSONS.forEach(lesson => {
-    if (lesson.category !== lastCat){
-      const catEl = document.createElement('div');
-      catEl.className = 'cat-label';
-      catEl.textContent = lesson.category;
-      list.appendChild(catEl);
-      lastCat = lesson.category;
+function getCurrentLesson(){
+  if (SUBJECT_ORDER.length === 0) return null;
+  // find a subject with lessons remaining in the rotation, starting from subjectTurn
+  for (let i = 0; i < SUBJECT_ORDER.length; i++){
+    const idx = (cycle.subjectTurn + i) % SUBJECT_ORDER.length;
+    const subj = SUBJECT_ORDER[idx];
+    const list = SUBJECTS[subj];
+    if (list && list.length > 0){
+      cycle.subjectTurn = idx;
+      const pointer = (cycle.pointers[subj] || 0) % list.length;
+      return list[pointer];
     }
-    const p = progress[lesson.id];
-    const entry = document.createElement('div');
-    entry.className = 'entry' + (lesson.id === activeLessonId ? ' active' : '') + (p && p.completed ? ' done' : '');
-    entry.innerHTML = `
-      <span class="dot"></span>
-      <span class="title">${lesson.title}</span>
-      ${p && p.completed ? `<span class="score">${p.score}/${p.total}</span>` : ''}
-    `;
-    entry.addEventListener('click', () => openLesson(lesson.id));
-    list.appendChild(entry);
-  });
+  }
+  return null;
 }
 
-function renderEmpty(){
-  document.getElementById('mainPanel').innerHTML = `<div class="empty">Select a lesson from the ledger to begin.</div>`;
+async function advanceCycle(){
+  const subj = SUBJECT_ORDER[cycle.subjectTurn];
+  const list = SUBJECTS[subj];
+  const pointer = (cycle.pointers[subj] || 0) % list.length;
+  cycle.pointers[subj] = pointer + 1; // moves forward; wraps via modulo next time this subject comes up
+  cycle.subjectTurn = (cycle.subjectTurn + 1) % SUBJECT_ORDER.length;
+  await saveCycle();
 }
 
-function openLesson(id){
-  activeLessonId = id;
+function renderCurrentLesson(){
   quizState = null;
-  renderLedger();
-  renderLessonView(id);
+  const lesson = getCurrentLesson();
+  if (!lesson){
+    document.getElementById('mainPanel').innerHTML = `<div class="empty">No lessons loaded yet.</div>`;
+    return;
+  }
+  currentLessonId = lesson.id;
+  renderLessonView(lesson.id);
+}
+
+function subjectProgressLabel(lesson){
+  const subj = subjectOf(lesson);
+  const list = SUBJECTS[subj];
+  const pointer = (cycle.pointers[subj] || 0) % list.length;
+  return `${subj} — lesson ${pointer + 1} of ${list.length}`;
 }
 
 function renderLessonView(id){
   const lesson = LESSONS.find(l => l.id === id);
   const panel = document.getElementById('mainPanel');
   panel.innerHTML = `
-    <div class="lesson-cat">${lesson.category}</div>
+    <div class="progress-row"><span>${subjectProgressLabel(lesson)}</span><span>${lesson.category}</span></div>
+    <div class="subject-pill">${subjectOf(lesson)}</div>
     <div class="lesson-title">${lesson.title}</div>
     <div class="lesson-body">${lesson.body.map(p => `<p>${p}</p>`).join('')}</div>
     <button class="btn" id="startQuizBtn">Take the quiz →</button>
@@ -359,7 +380,7 @@ function renderQuizView(id){
   const lesson = LESSONS.find(l => l.id === id);
   const panel = document.getElementById('mainPanel');
   let html = `
-    <div class="lesson-cat">${lesson.category}</div>
+    <div class="subject-pill">${subjectOf(lesson)}</div>
     <div class="lesson-title">${lesson.title} — Quiz</div>
   `;
   lesson.quiz.forEach((q, qi) => {
@@ -385,8 +406,8 @@ function renderQuizView(id){
     const total = lesson.quiz.length;
     const pct = Math.round(score/total*100);
     const pass = pct >= 70;
-    html = `<div class="result-banner ${pass ? 'pass' : 'fail'}">${score}/${total} correct (${pct}%) — ${pass ? 'Passed.' : 'Below 70% — review the lesson and retry.'}</div>` + html;
-    html += `<button class="btn ghost" id="retryQuizBtn">Retry quiz</button> <button class="btn ghost" id="backBtn">Back to lesson</button>`;
+    html = `<div class="result-banner ${pass ? 'pass' : 'fail'}">${score}/${total} correct (${pct}%) — ${pass ? 'Passed.' : 'Below 70% — review and retry if you want, or move on.'}</div>` + html;
+    html += `<button class="btn ghost" id="retryQuizBtn">Retry quiz</button> <button class="btn" id="nextBtn">Next lesson →</button>`;
   }
 
   panel.innerHTML = html;
@@ -405,7 +426,10 @@ function renderQuizView(id){
     submitBtn.addEventListener('click', () => submitQuiz(id));
   } else {
     document.getElementById('retryQuizBtn').addEventListener('click', () => startQuiz(id));
-    document.getElementById('backBtn').addEventListener('click', () => renderLessonView(id));
+    document.getElementById('nextBtn').addEventListener('click', async () => {
+      await advanceCycle();
+      renderCurrentLesson();
+    });
   }
 }
 
@@ -419,8 +443,7 @@ async function submitQuiz(id){
   renderQuizView(id);
 }
 
-// initial paint before auth resolves
-renderLedger();
+// initial paint happens once auth resolves and lessons are fetched
 renderStats();
 </script>
 </body>
