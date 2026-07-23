@@ -302,6 +302,7 @@ async function switchTrack(trackId){
 // ---------------- STATE ----------------
 let progress = {}; // { lessonId: { completed: bool, score: number, total: number, lastDate: 'YYYY-MM-DD' } }
 let quizState = null; // { answers: [], submitted: bool }
+let loggedThisVisit = false; // prevents quiz retries from double-counting toward the checkpoint trigger
 
 // Cycle state: which subject's turn is next, and how far through each subject's list we are.
 // { subjectTurn: 0, pointers: { CMA: 0, Finance: 0, Business: 0 } }
@@ -429,6 +430,7 @@ async function advanceCycle(){
 
 function renderCurrentLesson(){
   quizState = null;
+  loggedThisVisit = false;
   const lesson = getCurrentLesson();
   if (!lesson){
     const track = TRACKS.find(t => t.id === currentTrack);
@@ -531,9 +533,12 @@ async function submitQuiz(id){
   const today = new Date().toISOString().slice(0,10);
   await saveProgress(id, { completed: score/total >= 0.7, score, total, lastDate: today });
 
-  if (!cycle.completedOrder) cycle.completedOrder = [];
-  cycle.completedOrder.push(id);
-  await saveCycle();
+  if (!loggedThisVisit){
+    if (!cycle.completedOrder) cycle.completedOrder = [];
+    cycle.completedOrder.push(id);
+    await saveCycle();
+    loggedThisVisit = true;
+  }
 
   renderQuizView(id);
 }
