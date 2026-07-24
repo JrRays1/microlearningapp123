@@ -304,6 +304,12 @@ let progress = {}; // { lessonId: { completed: bool, score: number, total: numbe
 let quizState = null; // { answers: [], submitted: bool }
 let loggedThisVisit = false; // prevents quiz retries from double-counting toward the checkpoint trigger
 
+// Spaced repetition: { lessonId: { interval: days, dueDate: 'YYYY-MM-DD', reps: number } }
+let reviewSchedule = {};
+const REVIEW_INTERVALS = [1, 3, 7, 16, 35]; // days; caps at the last value on further successes
+const REVIEW_LOCAL_KEY = 'ledger_review_v1';
+let reviewState = null; // { lessonId, question: {...}, submitted, selected }
+
 // Cycle state: which subject's turn is next, and how far through each subject's list we are.
 // { subjectTurn: 0, pointers: { CMA: 0, Finance: 0, Business: 0 } }
 let cycles = {
@@ -333,6 +339,11 @@ async function loadProgressAndRender(){
         if (cycleSnap.exists()) cycles[track.id] = cycleSnap.data();
       } catch(e){ /* no cycle doc yet for this track — defaults stand */ }
     }
+
+    try {
+      const reviewSnap = await getDoc(doc(db, 'users', uid, 'meta', 'reviewSchedule'));
+      if (reviewSnap.exists()) reviewSchedule = reviewSnap.data();
+    } catch(e){ /* no review schedule yet — defaults stand */ }
   } else {
     try{ progress = JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}'); } catch(e){ progress = {}; }
     for (const track of TRACKS){
@@ -341,6 +352,10 @@ async function loadProgressAndRender(){
         if (stored) cycles[track.id] = stored;
       } catch(e){ /* defaults stand */ }
     }
+    try{
+      const storedReview = JSON.parse(localStorage.getItem(REVIEW_LOCAL_KEY) || '');
+      if (storedReview) reviewSchedule = storedReview;
+    } catch(e){ /* defaults stand */ }
   }
 
   cycle = cycles[currentTrack];
@@ -348,6 +363,19 @@ async function loadProgressAndRender(){
   setActiveTrackButton(currentTrack);
   renderStats();
   renderCurrentLesson();
+}
+
+async function saveReviewSchedule(){
+  if (firebaseReady && uid){
+    try {
+      await setDoc(doc(db, 'users', uid, 'meta', 'reviewSchedule'), reviewSchedule);
+    } catch (err) {
+      console.error('Could not save review schedule to Firestore, falling back to local storage:', err);
+      localStorage.setItem(REVIEW_LOCAL_KEY, JSON.stringify(reviewSchedule));
+    }
+  } else {
+    localStorage.setItem(REVIEW_LOCAL_KEY, JSON.stringify(reviewSchedule));
+  }
 }
 
 async function saveCycle(){
@@ -538,6 +566,10 @@ async function submitQuiz(id){
     cycle.completedOrder.push(id);
     await saveCycle();
     loggedThisVisit = true;
+
+    // Schedule the first spaced-repetition review for tomorrow
+    reviewSchedule[id] = { interval: REVIEW_INTERVALS[0], dueDate: addDays(new Date(), REVIEW_INTERVALS[0]), reps: 0 };
+    await saveReviewSchedule();
   }
 
   renderQuizView(id);
@@ -552,12 +584,36 @@ function checkpointDue(){
   return Math.floor(count / 5) > seen;
 }
 
+function addDays(date, days){
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0,10);
+}
+
+function todayStr(){
+  return new Date().toISOString().slice(0,10);
+}
+
+function getDueReviewId(){
+  const trackLessonIds = new Set(LESSONS.map(l => l.id));
+  const today = todayStr();
+  const due = Object.entries(reviewSchedule)
+    .filter(([id, r]) => trackLessonIds.has(id) && r.dueDate <= today)
+    .sort((a,b) => a[1].dueDate.localeCompare(b[1].dueDate));
+  return due.length ? due[0][0] : null;
+}
+
 function goToNext(){
   if (checkpointDue()){
     startCheckpoint();
-  } else {
-    advanceAndRenderNext();
+    return;
   }
+  const dueId = getDueReviewId();
+  if (dueId){
+    startReview(dueId);
+    return;
+  }
+  advanceAndRenderNext();
 }
 
 async function advanceAndRenderNext(){
@@ -567,6 +623,83 @@ async function advanceAndRenderNext(){
     console.error('advanceCycle failed, continuing anyway:', err);
   }
   renderCurrentLesson();
+}
+
+function startReview(lessonId){
+  const lesson = LESSONS.find(l => l.id === lessonId);
+  if (!lesson || !lesson.checkpoint){
+    // No recall question available for this lesson — skip the review rather than block progress
+    advanceAndRenderNext();
+    return;
+  }
+  reviewState = { lessonId, question: lesson.checkpoint, selected: null, submitted: false, lessonTitle: lesson.title };
+  renderReviewView();
+}
+
+function renderReviewView(){
+  const panel = document.getElementById('mainPanel');
+  const q = reviewState.question;
+  let html = `
+    <div class="subject-pill" style="background:var(--gold-dim); color:var(--white);">Spaced review</div>
+    <div class="lesson-title">${reviewState.lessonTitle}</div>
+    <div class="lesson-body"><p>No re-reading first — try to recall the answer from memory.</p></div>
+    <div class="quiz-q"><div class="qtext">${q.q}</div>
+  `;
+  q.options.forEach((opt, oi) => {
+    let cls = 'opt';
+    if (reviewState.submitted){
+      cls += ' disabled';
+      if (oi === q.correct) cls += ' correct';
+      else if (reviewState.selected === oi) cls += ' wrong';
+    } else if (reviewState.selected === oi){
+      cls += ' selected';
+    }
+    html += `<div class="${cls}" data-oi="${oi}">${opt}</div>`;
+  });
+  html += `</div>`;
+
+  if (!reviewState.submitted){
+    html += `<button class="btn" id="submitReviewBtn" ${reviewState.selected === null ? 'disabled' : ''}>Submit</button>`;
+  } else {
+    const correct = reviewState.selected === q.correct;
+    html = `<div class="result-banner ${correct ? 'pass' : 'fail'}">${correct ? 'Correct — recall reinforced.' : 'Not quite — this will come back around sooner.'}</div>` + html;
+    html += `<button class="btn" id="reviewContinueBtn">Continue →</button>`;
+  }
+
+  panel.innerHTML = html;
+
+  if (!reviewState.submitted){
+    panel.querySelectorAll('.opt').forEach(el => {
+      el.addEventListener('click', () => {
+        reviewState.selected = parseInt(el.dataset.oi);
+        renderReviewView();
+      });
+    });
+    const btn = document.getElementById('submitReviewBtn');
+    if (btn) btn.addEventListener('click', () => {
+      reviewState.submitted = true;
+      renderReviewView();
+    });
+  } else {
+    document.getElementById('reviewContinueBtn').addEventListener('click', async () => {
+      await finishReview(reviewState.selected === q.correct);
+    });
+  }
+}
+
+async function finishReview(wasCorrect){
+  const id = reviewState.lessonId;
+  const current = reviewSchedule[id] || { interval: REVIEW_INTERVALS[0], reps: 0 };
+  if (wasCorrect){
+    const nextIdx = Math.min(current.reps + 1, REVIEW_INTERVALS.length - 1);
+    const nextInterval = REVIEW_INTERVALS[nextIdx];
+    reviewSchedule[id] = { interval: nextInterval, dueDate: addDays(new Date(), nextInterval), reps: current.reps + 1 };
+  } else {
+    reviewSchedule[id] = { interval: REVIEW_INTERVALS[0], dueDate: addDays(new Date(), REVIEW_INTERVALS[0]), reps: 0 };
+  }
+  await saveReviewSchedule();
+  reviewState = null;
+  goToNext(); // check for further due reviews before finally advancing rotation
 }
 
 function startCheckpoint(){
@@ -635,7 +768,7 @@ function renderCheckpointView(){
       cycle.checkpointsSeen = Math.floor((cycle.completedOrder || []).length / 5);
       await saveCycle();
       checkpointState = null;
-      await advanceAndRenderNext();
+      goToNext();
     });
   }
 }
