@@ -99,15 +99,63 @@
   .panel::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
   .panel::-webkit-scrollbar-thumb:hover{background:var(--gold-dim);}
 
-  .track-toggle{display:flex; flex-wrap:wrap; gap:8px; max-width:720px; margin:0 auto 20px;}
-  .track-btn{min-width:140px;}
-  .track-btn{
-    flex:1; font-family:'IBM Plex Mono',monospace; font-size:12px; text-transform:uppercase; letter-spacing:0.04em;
-    background:var(--panel); color:var(--muted); border:1px solid var(--line); padding:12px 10px; border-radius:4px;
-    cursor:pointer; font-weight:600; text-align:center;
+  .track-toggle{display:none;} /* replaced by dashboard cards */
+
+  .dashboard{max-width:720px; margin:0 auto;}
+  .dashboard-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media (max-width:600px){ .dashboard-grid{grid-template-columns:1fr;} }
+  .track-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:24px;
+    cursor:pointer; transition:border-color 0.15s, transform 0.15s;
   }
-  .track-btn:hover{border-color:var(--gold-dim); color:var(--white);}
-  .track-btn.active{background:var(--gold); color:var(--ink); border-color:var(--gold);}
+  .track-card:hover{border-color:var(--gold); transform:translateY(-2px);}
+  .track-card .tc-title{font-family:'Fraunces',serif; font-size:19px; font-weight:600; color:var(--white); margin-bottom:10px; line-height:1.3;}
+  .track-card .tc-progress-bar{height:6px; background:var(--panel-2); border-radius:3px; overflow:hidden; margin-bottom:8px;}
+  .track-card .tc-progress-fill{height:100%; background:var(--gold); border-radius:3px;}
+  .track-card .tc-stats{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);}
+
+  .back-link{
+    display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted);
+    text-decoration:none; cursor:pointer; margin-bottom:16px; text-transform:uppercase; letter-spacing:0.04em;
+  }
+  .back-link:hover{color:var(--gold);}
+
+  .path-wrap{max-width:480px; margin:0 auto; padding:10px 0 30px;}
+  .path-title{font-family:'Fraunces',serif; font-size:22px; font-weight:600; color:var(--white); text-align:center; margin-bottom:6px;}
+  .path-subtitle{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); text-align:center; margin-bottom:28px; text-transform:uppercase; letter-spacing:0.05em;}
+
+  .stone-row{display:flex; align-items:center; justify-content:center; position:relative; height:78px;}
+  .stone-row::before{
+    content:''; position:absolute; top:-39px; left:50%; width:2px; height:78px;
+    background:var(--line); z-index:0;
+  }
+  .stone-row:first-child::before{display:none;}
+  .stone{
+    width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:15px; z-index:1; position:relative;
+    border:2px solid var(--line); background:var(--panel); color:var(--muted); flex-shrink:0;
+  }
+  .stone.done{background:var(--green); border-color:var(--green); color:var(--ink);}
+  .stone.current{
+    background:var(--gold); border-color:var(--gold); color:var(--ink); cursor:pointer;
+    box-shadow:0 0 0 5px rgba(201,162,75,0.18); animation:pulse 2s infinite;
+  }
+  .stone.current:hover{transform:scale(1.06);}
+  .stone.locked{opacity:0.5;}
+  @keyframes pulse{
+    0%,100%{ box-shadow:0 0 0 5px rgba(201,162,75,0.18); }
+    50%{ box-shadow:0 0 0 9px rgba(201,162,75,0.10); }
+  }
+  .stone-label{
+    position:absolute; left:calc(50% + 42px); font-family:'Inter',sans-serif; font-size:13px;
+    color:var(--muted); max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .stone.done ~ .stone-label, .stone-row:has(.stone.done) .stone-label{color:#a9b0ba;}
+  .stone-row:has(.stone.current) .stone-label{color:var(--white); font-weight:600;}
+  .path-complete-note{
+    text-align:center; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--gold);
+    margin-top:20px; padding:14px; border:1px solid var(--gold-dim); border-radius:6px;
+  }
 </style>
 </head>
 <body>
@@ -115,7 +163,7 @@
   <header class="top">
     <div>
       <div class="brand">Ledger<span>.</span></div>
-      <div class="tagline" id="tagline">CMA · Finance · Business — micro-lessons</div>
+      <div class="tagline" id="tagline">Micro-lessons</div>
     </div>
     <div class="stats">
       <div class="stat"><div class="n" id="statStreak">0</div><div class="l">Day Streak</div></div>
@@ -124,11 +172,8 @@
     </div>
   </header>
 
-  <div class="track-toggle" id="trackToggle" style="display:none;">
-    <button class="track-btn active" data-track="cma" id="trackBtnCma">CMA · Finance · Business</button>
-    <button class="track-btn" data-track="mind" id="trackBtnMind">Philosophy & Psychology</button>
-    <button class="track-btn" data-track="negotiation" id="trackBtnNegotiation">Negotiation · Communication · Persuasion</button>
-    <button class="track-btn" data-track="cfa" id="trackBtnCfa">CFA · Investing · Macro</button>
+  <div class="dashboard" id="dashboardView" style="display:none;">
+    <div class="dashboard-grid" id="dashboardGrid"></div>
   </div>
 
   <div class="board" id="appBoard" style="display:none;">
@@ -175,12 +220,20 @@ let firebaseConfigured = true;
 function showLogin(){
   document.getElementById('loginScreen').style.display = 'block';
   document.getElementById('appBoard').style.display = 'none';
-  document.getElementById('trackToggle').style.display = 'none';
+  document.getElementById('dashboardView').style.display = 'none';
 }
 function showApp(){
   document.getElementById('loginScreen').style.display = 'none';
+}
+function showDashboard(){
+  document.getElementById('appBoard').style.display = 'none';
+  document.getElementById('dashboardView').style.display = 'block';
+  document.getElementById('tagline').textContent = 'Pick a subject';
+  renderDashboardGrid();
+}
+function showBoard(){
+  document.getElementById('dashboardView').style.display = 'none';
   document.getElementById('appBoard').style.display = 'block';
-  document.getElementById('trackToggle').style.display = 'flex';
 }
 
 try {
@@ -195,6 +248,7 @@ try {
       showApp();
       await fetchLessons();
       await loadProgressAndRender();
+      showDashboard();
     } else {
       firebaseReady = false;
       document.getElementById('authNote').textContent = 'Sign in to continue.';
@@ -210,10 +264,6 @@ try {
 
 document.getElementById('loginBtn').addEventListener('click', doLogin);
 document.getElementById('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
-document.getElementById('trackBtnCma').addEventListener('click', () => switchTrack('cma'));
-document.getElementById('trackBtnMind').addEventListener('click', () => switchTrack('mind'));
-document.getElementById('trackBtnNegotiation').addEventListener('click', () => switchTrack('negotiation'));
-document.getElementById('trackBtnCfa').addEventListener('click', () => switchTrack('cfa'));
 
 function doLogin(){
   const pw = document.getElementById('loginPassword').value;
@@ -279,24 +329,137 @@ function rebuildTrackData(trackId){
   });
 }
 
-function setActiveTrackButton(trackId){
-  document.getElementById('trackBtnCma').classList.toggle('active', trackId === 'cma');
-  document.getElementById('trackBtnMind').classList.toggle('active', trackId === 'mind');
-  document.getElementById('trackBtnNegotiation').classList.toggle('active', trackId === 'negotiation');
-  document.getElementById('trackBtnCfa').classList.toggle('active', trackId === 'cfa');
+// Build the subjects/order for an arbitrary track without disturbing the currently active track's state.
+function buildSubjectsFor(trackId){
+  const lessons = ALL_LESSONS.filter(l => (l.track || 'cma') === trackId);
+  const subjects = {};
+  const order = [];
+  lessons.forEach(lesson => {
+    const subj = subjectOf(lesson);
+    if (!subjects[subj]){ subjects[subj] = []; order.push(subj); }
+    subjects[subj].push(lesson);
+  });
+  return { lessons, subjects, order };
+}
+
+// Simulate the full rotation order for a track from a zero-state, purely for display —
+// this matches what the live cycle would traverse since both start from the same rules.
+function buildFullPath(trackId){
+  const { lessons, subjects, order } = buildSubjectsFor(trackId);
+  if (lessons.length === 0 || order.length === 0) return [];
+  const pointers = {};
+  order.forEach(s => pointers[s] = 0);
+  const path = [];
+  const seen = new Set();
+  let turn = 0;
+  let guard = 0;
+  while (seen.size < lessons.length && guard < lessons.length * order.length + order.length){
+    guard++;
+    const subj = order[turn % order.length];
+    const list = subjects[subj];
+    const pointer = pointers[subj] % list.length;
+    const lesson = list[pointer];
+    if (!seen.has(lesson.id)){
+      path.push(lesson);
+      seen.add(lesson.id);
+    }
+    pointers[subj]++;
+    turn++;
+  }
+  return path;
+}
+
+function getTrackStats(trackId){
+  const lessons = ALL_LESSONS.filter(l => (l.track || 'cma') === trackId);
+  const ids = new Set(lessons.map(l => l.id));
+  const doneEntries = Object.entries(progress).filter(([id, p]) => ids.has(id) && p.completed);
+  return { total: lessons.length, done: doneEntries.length };
+}
+
+function renderDashboardGrid(){
+  const grid = document.getElementById('dashboardGrid');
+  grid.innerHTML = '';
+  TRACKS.forEach(track => {
+    const stats = getTrackStats(track.id);
+    const pct = stats.total ? Math.round((stats.done / stats.total) * 100) : 0;
+    const card = document.createElement('div');
+    card.className = 'track-card';
+    card.innerHTML = `
+      <div class="tc-title">${track.label}</div>
+      <div class="tc-progress-bar"><div class="tc-progress-fill" style="width:${pct}%;"></div></div>
+      <div class="tc-stats">${stats.done}/${stats.total} lessons complete</div>
+    `;
+    card.addEventListener('click', () => selectTrack(track.id));
+    grid.appendChild(card);
+  });
+}
+
+function renderPathView(){
+  const track = TRACKS.find(t => t.id === currentTrack);
+  const fullPath = buildFullPath(currentTrack);
+  const doneSet = new Set(cycle.completedOrder || []);
+  const current = getCurrentLesson();
+
+  const panel = document.getElementById('mainPanel');
+  if (fullPath.length === 0){
+    panel.innerHTML = `
+      <a class="back-link" id="backToDashboardBtn">← All subjects</a>
+      <div class="empty">No lessons yet on this side. Add some and re-run the upload script.</div>
+    `;
+    document.getElementById('backToDashboardBtn').addEventListener('click', showDashboard);
+    return;
+  }
+
+  let stonesHtml = '';
+  fullPath.forEach((lesson, i) => {
+    const isDone = doneSet.has(lesson.id);
+    const isCurrent = current && lesson.id === current.id;
+    let cls = 'locked';
+    if (isCurrent) cls = 'current';
+    else if (isDone) cls = 'done';
+    const clickable = isCurrent ? ` id="stone-${i}"` : '';
+    const num = isDone && !isCurrent ? '✓' : (i + 1);
+    stonesHtml += `
+      <div class="stone-row">
+        <div class="stone ${cls}"${clickable}>${num}</div>
+        <div class="stone-label">${lesson.title}</div>
+      </div>
+    `;
+  });
+
+  const allDone = doneSet.size >= fullPath.length && !current;
+
+  panel.innerHTML = `
+    <a class="back-link" id="backToDashboardBtn">← All subjects</a>
+    <div class="path-wrap">
+      <div class="path-title">${track.label}</div>
+      <div class="path-subtitle">${doneSet.size} of ${fullPath.length} complete</div>
+      ${stonesHtml}
+      ${allDone ? '<div class="path-complete-note">All lessons complete — next click starts a new lap.</div>' : ''}
+    </div>
+  `;
+
+  document.getElementById('backToDashboardBtn').addEventListener('click', showDashboard);
+  if (current){
+    const stoneEl = document.getElementById(`stone-${fullPath.findIndex(l => l.id === current.id)}`);
+    if (stoneEl) stoneEl.addEventListener('click', () => renderCurrentLesson());
+  }
+}
+
+function updateTagline(trackId){
   const track = TRACKS.find(t => t.id === trackId);
   document.getElementById('tagline').textContent = `${track.label} — micro-lessons`;
 }
 
-async function switchTrack(trackId){
-  if (trackId === currentTrack) return;
+function selectTrack(trackId){
   currentTrack = trackId;
   localStorage.setItem(TRACK_LOCAL_KEY, trackId);
-  setActiveTrackButton(trackId);
   rebuildTrackData(trackId);
   cycle = cycles[trackId];
+  updateTagline(trackId);
   renderStats();
-  renderCurrentLesson();
+  showBoard();
+  renderPathView();
 }
 
 // ---------------- STATE ----------------
@@ -360,9 +523,7 @@ async function loadProgressAndRender(){
 
   cycle = cycles[currentTrack];
   rebuildTrackData(currentTrack);
-  setActiveTrackButton(currentTrack);
   renderStats();
-  renderCurrentLesson();
 }
 
 async function saveReviewSchedule(){
@@ -625,24 +786,67 @@ async function advanceAndRenderNext(){
   renderCurrentLesson();
 }
 
+// ---- Adaptive difficulty: rolling accuracy across the last 8 reviews, per track ----
+function getRollingAccuracy(){
+  const results = (reviewSchedule.__meta && reviewSchedule.__meta[currentTrack]) || [];
+  if (results.length < 4) return null; // not enough data yet — use medium difficulty by default
+  const correct = results.filter(r => r).length;
+  return correct / results.length;
+}
+
+function recordReviewResult(wasCorrect){
+  if (!reviewSchedule.__meta) reviewSchedule.__meta = {};
+  if (!reviewSchedule.__meta[currentTrack]) reviewSchedule.__meta[currentTrack] = [];
+  const arr = reviewSchedule.__meta[currentTrack];
+  arr.push(wasCorrect);
+  if (arr.length > 8) arr.shift(); // keep only the most recent 8
+}
+
+function getDifficultyTier(){
+  const acc = getRollingAccuracy();
+  if (acc === null) return 'medium';
+  if (acc < 0.6) return 'easy';
+  if (acc > 0.85) return 'hard';
+  return 'medium';
+}
+
 function startReview(lessonId){
   const lesson = LESSONS.find(l => l.id === lessonId);
   if (!lesson || !lesson.checkpoint){
-    // No recall question available for this lesson — skip the review rather than block progress
     advanceAndRenderNext();
     return;
   }
-  reviewState = { lessonId, question: lesson.checkpoint, selected: null, submitted: false, lessonTitle: lesson.title };
+  const tier = getDifficultyTier();
+  let questions;
+  if (tier === 'easy' && lesson.quiz && lesson.quiz.length){
+    questions = [lesson.quiz[0]];
+  } else if (tier === 'hard'){
+    // Chain the checkpoint with a second question from a different lesson on this track,
+    // forcing two concepts to be held active at once.
+    const other = LESSONS.filter(l => l.id !== lessonId && l.checkpoint);
+    const secondQ = other.length ? other[Math.floor(Math.random() * other.length)] : null;
+    questions = secondQ ? [lesson.checkpoint, secondQ.checkpoint] : [lesson.checkpoint];
+    reviewState = { lessonId, questions, current: 0, results: [], selected: null, submitted: false,
+      lessonTitle: lesson.title, secondTitle: secondQ ? secondQ.title : null, tier };
+    renderReviewView();
+    return;
+  } else {
+    questions = [lesson.checkpoint];
+  }
+  reviewState = { lessonId, questions, current: 0, results: [], selected: null, submitted: false,
+    lessonTitle: lesson.title, secondTitle: null, tier };
   renderReviewView();
 }
 
 function renderReviewView(){
   const panel = document.getElementById('mainPanel');
-  const q = reviewState.question;
+  const q = reviewState.questions[reviewState.current];
+  const isSecond = reviewState.current === 1;
+  const tierLabel = reviewState.tier === 'hard' ? 'Spaced review — harder' : reviewState.tier === 'easy' ? 'Spaced review — warm-up' : 'Spaced review';
   let html = `
-    <div class="subject-pill" style="background:var(--gold-dim); color:var(--white);">Spaced review</div>
-    <div class="lesson-title">${reviewState.lessonTitle}</div>
-    <div class="lesson-body"><p>No re-reading first — try to recall the answer from memory.</p></div>
+    <div class="subject-pill" style="background:var(--gold-dim); color:var(--white);">${tierLabel}</div>
+    <div class="lesson-title">${isSecond ? reviewState.secondTitle : reviewState.lessonTitle}</div>
+    <div class="lesson-body"><p>No re-reading first — try to recall the answer from memory.${reviewState.questions.length > 1 ? ' (Question ' + (reviewState.current+1) + ' of ' + reviewState.questions.length + ')' : ''}</p></div>
     <div class="quiz-q"><div class="qtext">${q.q}</div>
   `;
   q.options.forEach((opt, oi) => {
@@ -662,8 +866,9 @@ function renderReviewView(){
     html += `<button class="btn" id="submitReviewBtn" ${reviewState.selected === null ? 'disabled' : ''}>Submit</button>`;
   } else {
     const correct = reviewState.selected === q.correct;
+    const isLast = reviewState.current === reviewState.questions.length - 1;
     html = `<div class="result-banner ${correct ? 'pass' : 'fail'}">${correct ? 'Correct — recall reinforced.' : 'Not quite — this will come back around sooner.'}</div>` + html;
-    html += `<button class="btn" id="reviewContinueBtn">Continue →</button>`;
+    html += `<button class="btn" id="reviewContinueBtn">${isLast ? 'Continue →' : 'Next question →'}</button>`;
   }
 
   panel.innerHTML = html;
@@ -682,13 +887,28 @@ function renderReviewView(){
     });
   } else {
     document.getElementById('reviewContinueBtn').addEventListener('click', async () => {
-      await finishReview(reviewState.selected === q.correct);
+      const wasCorrect = reviewState.selected === q.correct;
+      reviewState.results.push(wasCorrect);
+      if (reviewState.current < reviewState.questions.length - 1){
+        reviewState.current++;
+        reviewState.selected = null;
+        reviewState.submitted = false;
+        renderReviewView();
+      } else {
+        await finishReview(reviewState.results);
+      }
     });
   }
 }
 
-async function finishReview(wasCorrect){
+async function finishReview(results){
   const id = reviewState.lessonId;
+  // Overall pass requires getting the primary (first) question right — the chained
+  // second question in hard mode still counts toward rolling accuracy, but doesn't
+  // by itself reset the lesson's own interval.
+  const wasCorrect = results[0];
+  results.forEach(r => recordReviewResult(r));
+
   const current = reviewSchedule[id] || { interval: REVIEW_INTERVALS[0], reps: 0 };
   if (wasCorrect){
     const nextIdx = Math.min(current.reps + 1, REVIEW_INTERVALS.length - 1);
