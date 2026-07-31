@@ -120,6 +120,21 @@
   }
   .back-link:hover{color:var(--gold);}
 
+  .home-btn{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; text-transform:uppercase; letter-spacing:0.04em;
+    background:transparent; color:var(--muted); border:1px solid var(--line); padding:8px 14px; border-radius:4px;
+    cursor:pointer; margin-right:6px;
+  }
+  .home-btn:hover{border-color:var(--gold); color:var(--gold);}
+
+  .stone.test{
+    width:44px; height:44px; border-radius:8px; transform:rotate(45deg);
+    background:var(--panel-2); border:2px solid var(--line); color:var(--muted);
+  }
+  .stone.test span{transform:rotate(-45deg); display:block; font-size:13px;}
+  .stone.test.done{background:var(--green); border-color:var(--green); color:var(--ink);}
+  .stone.test.upcoming{border-color:var(--gold-dim); color:var(--gold-dim);}
+
   .path-wrap{max-width:480px; margin:0 auto; padding:10px 0 30px;}
   .path-title{font-family:'Fraunces',serif; font-size:22px; font-weight:600; color:var(--white); text-align:center; margin-bottom:6px;}
   .path-subtitle{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); text-align:center; margin-bottom:28px; text-transform:uppercase; letter-spacing:0.05em;}
@@ -166,6 +181,7 @@
       <div class="tagline" id="tagline">Micro-lessons</div>
     </div>
     <div class="stats">
+      <button class="home-btn" id="homeBtn" style="display:none;">⌂ Home</button>
       <div class="stat"><div class="n" id="statStreak">0</div><div class="l">Day Streak</div></div>
       <div class="stat"><div class="n" id="statDone">0/0</div><div class="l">Completed</div></div>
       <div class="stat"><div class="n" id="statAvg">—</div><div class="l">Avg Score</div></div>
@@ -221,20 +237,26 @@ function showLogin(){
   document.getElementById('loginScreen').style.display = 'block';
   document.getElementById('appBoard').style.display = 'none';
   document.getElementById('dashboardView').style.display = 'none';
+  document.getElementById('homeBtn').style.display = 'none';
 }
 function showApp(){
   document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('homeBtn').style.display = 'inline-block';
 }
 function showDashboard(){
   document.getElementById('appBoard').style.display = 'none';
   document.getElementById('dashboardView').style.display = 'block';
   document.getElementById('tagline').textContent = 'Pick a subject';
+  document.getElementById('homeBtn').style.display = 'none';
   renderDashboardGrid();
 }
 function showBoard(){
   document.getElementById('dashboardView').style.display = 'none';
   document.getElementById('appBoard').style.display = 'block';
+  document.getElementById('homeBtn').style.display = 'inline-block';
 }
+
+document.getElementById('homeBtn').addEventListener('click', showDashboard);
 
 try {
   const app = initializeApp(firebaseConfig);
@@ -410,6 +432,7 @@ function renderPathView(){
     return;
   }
 
+  const checkpointsSeen = cycle.checkpointsSeen || 0;
   let stonesHtml = '';
   fullPath.forEach((lesson, i) => {
     const isDone = doneSet.has(lesson.id);
@@ -425,6 +448,25 @@ function renderPathView(){
         <div class="stone-label">${lesson.title}</div>
       </div>
     `;
+    // Every 5th lesson, show the checkpoint mini-test as its own stone on the path
+    if ((i + 1) % 5 === 0){
+      const testNum = (i + 1) / 5;
+      let testCls = '';
+      let testLabel = `Checkpoint ${testNum}`;
+      if (testNum <= checkpointsSeen){
+        testCls = 'done';
+        testLabel += ' — passed';
+      } else if (testNum === checkpointsSeen + 1){
+        testCls = 'upcoming';
+        testLabel += ' — up next';
+      }
+      stonesHtml += `
+        <div class="stone-row">
+          <div class="stone test ${testCls}"><span>${testNum <= checkpointsSeen ? '✓' : 'T'}</span></div>
+          <div class="stone-label">${testLabel}</div>
+        </div>
+      `;
+    }
   });
 
   const allDone = doneSet.size >= fullPath.length && !current;
@@ -783,7 +825,7 @@ async function advanceAndRenderNext(){
   } catch (err) {
     console.error('advanceCycle failed, continuing anyway:', err);
   }
-  renderCurrentLesson();
+  renderPathView();
 }
 
 // ---- Adaptive difficulty: rolling accuracy across the last 8 reviews, per track ----
