@@ -65,17 +65,20 @@
     font-family:'IBM Plex Mono',monospace; font-size:13px; text-transform:uppercase; letter-spacing:0.06em;
     background:var(--gold); color:var(--ink); border:none; padding:14px 22px; border-radius:4px;
     cursor:pointer; font-weight:600; margin-top:10px;
+    transition:background 0.15s ease, transform 0.1s ease;
   }
-  .btn:hover{background:#dab767;}
+  .btn:hover{background:#dab767; transform:translateY(-1px);}
+  .btn:active{transform:translateY(0);}
   .btn.ghost{background:transparent; border:1px solid var(--line); color:var(--white);}
-  .btn.ghost:hover{border-color:var(--gold); color:var(--gold);}
-  .btn:disabled{opacity:0.4; cursor:not-allowed;}
+  .btn.ghost:hover{border-color:var(--gold); color:var(--gold); background:transparent;}
+  .btn:disabled{opacity:0.4; cursor:not-allowed; transform:none;}
 
   .quiz-q{margin-bottom:26px;}
   .quiz-q .qtext{font-size:18px; margin-bottom:12px; color:var(--white); font-weight:500; line-height:1.5;}
   .opt{
     display:block; padding:13px 16px; margin-bottom:9px; border:1px solid var(--line);
     border-radius:4px; cursor:pointer; font-size:16px; color:#d7d9dd; line-height:1.5;
+    transition:border-color 0.15s ease, background 0.15s ease;
   }
   .opt:hover{border-color:var(--gold-dim);}
   .opt.selected{border-color:var(--gold); background:rgba(201,162,75,0.08);}
@@ -102,28 +105,38 @@
   .track-toggle{display:none;} /* replaced by dashboard cards */
 
   .dashboard{max-width:720px; margin:0 auto;}
+  .dashboard-intro{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); text-align:center; margin-bottom:24px; text-transform:uppercase; letter-spacing:0.06em;}
   .dashboard-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
   @media (max-width:600px){ .dashboard-grid{grid-template-columns:1fr;} }
   .track-card{
-    background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:24px;
-    cursor:pointer; transition:border-color 0.15s, transform 0.15s;
+    position:relative; background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    padding:24px 24px 24px 28px; cursor:pointer; overflow:hidden;
+    transition:border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   }
-  .track-card:hover{border-color:var(--gold); transform:translateY(-2px);}
-  .track-card .tc-title{font-family:'Fraunces',serif; font-size:19px; font-weight:600; color:var(--white); margin-bottom:10px; line-height:1.3;}
+  .track-card::before{
+    content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--tc-accent, var(--gold));
+  }
+  .track-card:hover{
+    border-color:var(--tc-accent, var(--gold)); transform:translateY(-3px);
+    box-shadow:0 10px 24px -12px rgba(0,0,0,0.5);
+  }
+  .track-card .tc-icon{font-size:20px; margin-bottom:10px; display:block; opacity:0.9;}
+  .track-card .tc-title{font-family:'Fraunces',serif; font-size:19px; font-weight:600; color:var(--white); margin-bottom:12px; line-height:1.3;}
   .track-card .tc-progress-bar{height:6px; background:var(--panel-2); border-radius:3px; overflow:hidden; margin-bottom:8px;}
-  .track-card .tc-progress-fill{height:100%; background:var(--gold); border-radius:3px;}
+  .track-card .tc-progress-fill{height:100%; background:var(--tc-accent, var(--gold)); border-radius:3px; transition:width 0.4s ease;}
   .track-card .tc-stats{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);}
 
   .back-link{
-    display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted);
+    display:inline-flex; align-items:center; gap:6px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted);
     text-decoration:none; cursor:pointer; margin-bottom:16px; text-transform:uppercase; letter-spacing:0.04em;
+    transition:color 0.15s ease;
   }
   .back-link:hover{color:var(--gold);}
 
   .home-btn{
     font-family:'IBM Plex Mono',monospace; font-size:12px; text-transform:uppercase; letter-spacing:0.04em;
     background:transparent; color:var(--muted); border:1px solid var(--line); padding:8px 14px; border-radius:4px;
-    cursor:pointer; margin-right:6px;
+    cursor:pointer; margin-right:6px; transition:border-color 0.15s ease, color 0.15s ease;
   }
   .home-btn:hover{border-color:var(--gold); color:var(--gold);}
 
@@ -133,44 +146,55 @@
   }
   .stone.test span{transform:rotate(-45deg); display:block; font-size:13px;}
   .stone.test.done{background:var(--green); border-color:var(--green); color:var(--ink);}
-  .stone.test.upcoming{border-color:var(--gold-dim); color:var(--gold-dim);}
+  .stone.test.upcoming{border-color:var(--gold-dim); color:var(--gold-dim); box-shadow:0 0 0 4px rgba(201,162,75,0.12);}
 
-  .path-wrap{max-width:480px; margin:0 auto; padding:10px 0 30px;}
+  .path-wrap{max-width:420px; margin:0 auto; padding:10px 0 40px;}
   .path-title{font-family:'Fraunces',serif; font-size:22px; font-weight:600; color:var(--white); text-align:center; margin-bottom:6px;}
-  .path-subtitle{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); text-align:center; margin-bottom:28px; text-transform:uppercase; letter-spacing:0.05em;}
+  .path-subtitle{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); text-align:center; margin-bottom:36px; text-transform:uppercase; letter-spacing:0.05em;}
 
-  .stone-row{display:flex; align-items:center; justify-content:center; position:relative; height:78px;}
+  .stone-row{
+    display:flex; flex-direction:column; align-items:center; position:relative;
+    padding-top:34px; padding-bottom:6px;
+  }
   .stone-row::before{
-    content:''; position:absolute; top:-39px; left:50%; width:2px; height:78px;
-    background:var(--line); z-index:0;
+    content:''; position:absolute; top:0; left:50%; width:0; height:34px;
+    border-left:2px dashed rgba(201,162,75,0.35); transform:translateX(-1px);
   }
   .stone-row:first-child::before{display:none;}
+  .stone-track{ width:100%; display:flex; justify-content:center; }
+  .stone-row[data-pos="left"] .stone-track{ justify-content:flex-start; padding-left:14%; }
+  .stone-row[data-pos="right"] .stone-track{ justify-content:flex-end; padding-right:14%; }
   .stone{
     width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center;
     font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:15px; z-index:1; position:relative;
     border:2px solid var(--line); background:var(--panel); color:var(--muted); flex-shrink:0;
+    transition:transform 0.15s ease, box-shadow 0.15s ease;
   }
   .stone.done{background:var(--green); border-color:var(--green); color:var(--ink);}
   .stone.current{
     background:var(--gold); border-color:var(--gold); color:var(--ink); cursor:pointer;
     box-shadow:0 0 0 5px rgba(201,162,75,0.18); animation:pulse 2s infinite;
   }
-  .stone.current:hover{transform:scale(1.06);}
-  .stone.locked{opacity:0.5;}
+  .stone.current:hover{transform:scale(1.08);}
+  .stone.locked{opacity:0.45;}
   @keyframes pulse{
     0%,100%{ box-shadow:0 0 0 5px rgba(201,162,75,0.18); }
     50%{ box-shadow:0 0 0 9px rgba(201,162,75,0.10); }
   }
   .stone-label{
-    position:absolute; left:calc(50% + 42px); font-family:'Inter',sans-serif; font-size:13px;
-    color:var(--muted); max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    margin-top:8px; font-family:'Inter',sans-serif; font-size:12.5px; color:var(--muted);
+    max-width:190px; text-align:center; line-height:1.3;
   }
-  .stone.done ~ .stone-label, .stone-row:has(.stone.done) .stone-label{color:#a9b0ba;}
-  .stone-row:has(.stone.current) .stone-label{color:var(--white); font-weight:600;}
+  .stone-row[data-pos="left"] .stone-label{ text-align:left; margin-left:14%; }
+  .stone-row[data-pos="right"] .stone-label{ text-align:right; margin-right:14%; }
+  .stone-row.is-current .stone-label{color:var(--white); font-weight:600;}
+  .stone-row.is-done .stone-label{color:#8f97a3;}
   .path-complete-note{
     text-align:center; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--gold);
     margin-top:20px; padding:14px; border:1px solid var(--gold-dim); border-radius:6px;
   }
+  .fade-in{animation:fadeIn 0.25s ease;}
+  @keyframes fadeIn{ from{ opacity:0; transform:translateY(4px);} to{ opacity:1; transform:translateY(0);} }
 </style>
 </head>
 <body>
@@ -189,6 +213,7 @@
   </header>
 
   <div class="dashboard" id="dashboardView" style="display:none;">
+    <div class="dashboard-intro">Four subjects, one ledger. Pick where you're picking up.</div>
     <div class="dashboard-grid" id="dashboardGrid"></div>
   </div>
 
@@ -398,15 +423,26 @@ function getTrackStats(trackId){
   return { total: lessons.length, done: doneEntries.length };
 }
 
+// One accent color and glyph per track, for quick visual identity across the dashboard and path.
+const TRACK_STYLE = {
+  cma: { accent: '#c9a24b', icon: '⌘' },
+  mind: { accent: '#9b8ecb', icon: '◐' },
+  negotiation: { accent: '#c67a4e', icon: '◈' },
+  cfa: { accent: '#5f9a72', icon: '△' }
+};
+
 function renderDashboardGrid(){
   const grid = document.getElementById('dashboardGrid');
   grid.innerHTML = '';
   TRACKS.forEach(track => {
     const stats = getTrackStats(track.id);
     const pct = stats.total ? Math.round((stats.done / stats.total) * 100) : 0;
+    const style = TRACK_STYLE[track.id] || TRACK_STYLE.cma;
     const card = document.createElement('div');
     card.className = 'track-card';
+    card.style.setProperty('--tc-accent', style.accent);
     card.innerHTML = `
+      <span class="tc-icon" style="color:${style.accent};">${style.icon}</span>
       <div class="tc-title">${track.label}</div>
       <div class="tc-progress-bar"><div class="tc-progress-fill" style="width:${pct}%;"></div></div>
       <div class="tc-stats">${stats.done}/${stats.total} lessons complete</div>
@@ -432,6 +468,8 @@ function renderPathView(){
     return;
   }
 
+  const positions = ['center', 'left', 'right']; // cycles for a gentle zigzag rhythm
+  let posIdx = 0;
   const checkpointsSeen = cycle.checkpointsSeen || 0;
   let stonesHtml = '';
   fullPath.forEach((lesson, i) => {
@@ -442,9 +480,11 @@ function renderPathView(){
     else if (isDone) cls = 'done';
     const clickable = isCurrent ? ` id="stone-${i}"` : '';
     const num = isDone && !isCurrent ? '✓' : (i + 1);
+    const pos = positions[posIdx % positions.length]; posIdx++;
+    const rowState = isCurrent ? 'is-current' : (isDone ? 'is-done' : '');
     stonesHtml += `
-      <div class="stone-row">
-        <div class="stone ${cls}"${clickable}>${num}</div>
+      <div class="stone-row ${rowState}" data-pos="${pos}">
+        <div class="stone-track"><div class="stone ${cls}"${clickable}>${num}</div></div>
         <div class="stone-label">${lesson.title}</div>
       </div>
     `;
@@ -460,9 +500,10 @@ function renderPathView(){
         testCls = 'upcoming';
         testLabel += ' — up next';
       }
+      const testPos = positions[posIdx % positions.length]; posIdx++;
       stonesHtml += `
-        <div class="stone-row">
-          <div class="stone test ${testCls}"><span>${testNum <= checkpointsSeen ? '✓' : 'T'}</span></div>
+        <div class="stone-row" data-pos="${testPos}">
+          <div class="stone-track"><div class="stone test ${testCls}"><span>${testNum <= checkpointsSeen ? '✓' : 'T'}</span></div></div>
           <div class="stone-label">${testLabel}</div>
         </div>
       `;
@@ -473,7 +514,7 @@ function renderPathView(){
 
   panel.innerHTML = `
     <a class="back-link" id="backToDashboardBtn">← All subjects</a>
-    <div class="path-wrap">
+    <div class="path-wrap fade-in">
       <div class="path-title">${track.label}</div>
       <div class="path-subtitle">${doneSet.size} of ${fullPath.length} complete</div>
       ${stonesHtml}
@@ -683,11 +724,13 @@ function renderLessonView(id){
   const lesson = LESSONS.find(l => l.id === id);
   const panel = document.getElementById('mainPanel');
   panel.innerHTML = `
-    <div class="progress-row"><span>${subjectProgressLabel(lesson)}</span><span>${lesson.category}</span></div>
-    <div class="subject-pill">${subjectOf(lesson)}</div>
-    <div class="lesson-title">${lesson.title}</div>
-    <div class="lesson-body">${lesson.body.map(p => `<p>${p}</p>`).join('')}</div>
-    <button class="btn" id="startQuizBtn">Take the quiz →</button>
+    <div class="fade-in">
+      <div class="progress-row"><span>${subjectProgressLabel(lesson)}</span><span>${lesson.category}</span></div>
+      <div class="subject-pill">${subjectOf(lesson)}</div>
+      <div class="lesson-title">${lesson.title}</div>
+      <div class="lesson-body">${lesson.body.map(p => `<p>${p}</p>`).join('')}</div>
+      <button class="btn" id="startQuizBtn">Take the quiz →</button>
+    </div>
   `;
   document.getElementById('startQuizBtn').addEventListener('click', () => startQuiz(id));
 }
