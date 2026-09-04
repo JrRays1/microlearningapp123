@@ -260,6 +260,74 @@
     outline:none; border-color:var(--gold); box-shadow:0 0 0 3px rgba(201,162,75,0.15);
   }
   .login-input::placeholder{color:var(--muted);}
+
+  /* ---- XP / Level HUD ---- */
+  .xp-hud{
+    max-width:980px; margin:0 auto 28px; display:flex; align-items:center; gap:14px;
+    background:linear-gradient(165deg, var(--panel) 0%, var(--panel-2) 140%);
+    border:1px solid var(--line); border-radius:10px; padding:12px 16px;
+    box-shadow:var(--shadow-sm);
+  }
+  .xp-level-badge{
+    font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:13px; color:var(--ink);
+    background:linear-gradient(135deg, var(--gold-bright), var(--gold));
+    padding:6px 13px; border-radius:20px; flex-shrink:0; box-shadow:0 2px 8px -2px rgba(201,162,75,0.4);
+  }
+  .xp-bar-track{
+    flex:1; height:10px; background:var(--ink-2); border-radius:5px; overflow:hidden;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,0.35);
+  }
+  .xp-bar-fill{
+    height:100%; border-radius:5px;
+    background:linear-gradient(90deg, var(--gold-dim), var(--gold), var(--gold-bright));
+    background-size:200% 100%;
+    transition:width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow:0 0 8px rgba(201,162,75,0.5);
+  }
+  .xp-count{
+    font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); flex-shrink:0; white-space:nowrap;
+  }
+
+  /* ---- Toasts ---- */
+  #toastContainer{
+    position:fixed; top:20px; right:20px; z-index:1000; display:flex; flex-direction:column; gap:10px;
+    pointer-events:none;
+  }
+  .toast{
+    font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:14px; color:var(--ink);
+    background:linear-gradient(135deg, var(--gold-bright), var(--gold));
+    padding:12px 20px; border-radius:8px; box-shadow:var(--shadow-md);
+    animation:toastIn 0.35s ease, toastOut 0.4s ease 2.2s forwards;
+  }
+  .toast.levelup{
+    background:linear-gradient(135deg, #6fae83, var(--green)); color:var(--ink); font-size:16px;
+    animation:toastIn 0.4s ease, toastPop 0.5s ease 0.1s, toastOut 0.4s ease 3.0s forwards;
+  }
+  @keyframes toastIn{ from{ opacity:0; transform:translateX(30px);} to{ opacity:1; transform:translateX(0);} }
+  @keyframes toastOut{ from{ opacity:1;} to{ opacity:0; transform:translateX(20px);} }
+  @keyframes toastPop{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.06);} }
+
+  /* ---- Completed lessons history ---- */
+  .history-wrap{max-width:640px; margin:0 auto;}
+  .history-group-title{
+    font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--gold); text-transform:uppercase;
+    letter-spacing:0.08em; margin:26px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line-soft);
+  }
+  .history-group-title:first-child{margin-top:0;}
+  .history-row{
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+    padding:13px 4px; border-bottom:1px solid var(--line-soft);
+  }
+  .history-row:last-child{border-bottom:none;}
+  .history-title{font-size:14.5px; color:var(--white);}
+  .history-meta{
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted); flex-shrink:0;
+    display:flex; align-items:center; gap:10px;
+  }
+  .history-score{font-weight:700;}
+  .history-score.high{color:var(--green);}
+  .history-score.low{color:var(--red);}
+  .history-empty{color:var(--muted); font-size:14px; text-align:center; padding:60px 20px;}
 </style>
 </head>
 <body>
@@ -270,6 +338,7 @@
       <div class="tagline" id="tagline">Micro-lessons</div>
     </div>
     <div class="stats">
+      <button class="home-btn" id="historyBtn" style="display:none;">📜 Completed</button>
       <button class="home-btn" id="homeBtn" style="display:none;">⌂ Home</button>
       <div class="stat"><div class="n" id="statStreak">0</div><div class="l">Day Streak</div></div>
       <div class="stat"><div class="n" id="statDone">0/0</div><div class="l">Completed</div></div>
@@ -277,8 +346,18 @@
     </div>
   </header>
 
+  <div class="xp-hud" id="xpHud" style="display:none;">
+    <div class="xp-level-badge" id="xpLevelBadge">Lv. 1</div>
+    <div class="xp-bar-track">
+      <div class="xp-bar-fill" id="xpBarFill" style="width:0%;"></div>
+    </div>
+    <div class="xp-count" id="xpCount">0 / 100 XP</div>
+  </div>
+
+  <div id="toastContainer"></div>
+
   <div class="dashboard" id="dashboardView" style="display:none;">
-    <div class="dashboard-intro">Four subjects, one ledger. Pick where you're picking up.</div>
+    <div class="dashboard-intro">Five subjects, one ledger. Pick where you're picking up.</div>
     <div class="dashboard-grid" id="dashboardGrid"></div>
   </div>
 
@@ -331,10 +410,14 @@ function showLogin(){
   document.getElementById('appBoard').style.display = 'none';
   document.getElementById('dashboardView').style.display = 'none';
   document.getElementById('homeBtn').style.display = 'none';
+  document.getElementById('historyBtn').style.display = 'none';
+  document.getElementById('xpHud').style.display = 'none';
 }
 function showApp(){
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('homeBtn').style.display = 'inline-block';
+  document.getElementById('historyBtn').style.display = 'inline-block';
+  document.getElementById('xpHud').style.display = 'flex';
 }
 function showDashboard(){
   document.getElementById('appBoard').style.display = 'none';
@@ -350,6 +433,7 @@ function showBoard(){
 }
 
 document.getElementById('homeBtn').addEventListener('click', showDashboard);
+document.getElementById('historyBtn').addEventListener('click', showHistoryView);
 
 try {
   const app = initializeApp(firebaseConfig);
@@ -605,6 +689,63 @@ function updateTagline(trackId){
   document.getElementById('tagline').textContent = `${track.label} — micro-lessons`;
 }
 
+function showHistoryView(){
+  showBoard();
+  renderHistoryView();
+}
+
+function renderHistoryView(){
+  const panel = document.getElementById('mainPanel');
+  const doneEntries = Object.entries(progress).filter(([id, p]) => p.completed);
+
+  if (doneEntries.length === 0){
+    panel.innerHTML = `
+      <a class="back-link" id="backToDashboardBtn2">← All subjects</a>
+      <div class="history-empty">No lessons completed yet — finish your first one and it'll show up here.</div>
+    `;
+    document.getElementById('backToDashboardBtn2').addEventListener('click', showDashboard);
+    return;
+  }
+
+  // Group completed lessons by track, most recently completed first within each group.
+  const byTrack = {};
+  doneEntries.forEach(([id, p]) => {
+    const lesson = ALL_LESSONS.find(l => l.id === id);
+    if (!lesson) return; // lesson may have been removed from content since completion
+    const trackId = lesson.track || 'cma';
+    if (!byTrack[trackId]) byTrack[trackId] = [];
+    byTrack[trackId].push({ lesson, progress: p });
+  });
+
+  let html = `<a class="back-link" id="backToDashboardBtn2">← All subjects</a><div class="history-wrap fade-in">`;
+  html += `<div class="path-title">Completed Lessons</div>`;
+  html += `<div class="path-subtitle">${doneEntries.length} lesson${doneEntries.length === 1 ? '' : 's'} finished, across every subject</div>`;
+
+  TRACKS.forEach(track => {
+    const entries = byTrack[track.id];
+    if (!entries || entries.length === 0) return;
+    entries.sort((a, b) => (b.progress.lastDate || '').localeCompare(a.progress.lastDate || ''));
+    html += `<div class="history-group-title">${track.label} — ${entries.length}</div>`;
+    entries.forEach(({ lesson, progress: p }) => {
+      const pct = p.total ? Math.round((p.score / p.total) * 100) : 0;
+      const scoreClass = pct >= 70 ? 'high' : 'low';
+      html += `
+        <div class="history-row">
+          <div class="history-title">${lesson.title}</div>
+          <div class="history-meta">
+            <span class="history-score ${scoreClass}">${p.score}/${p.total}</span>
+            <span>${p.lastDate || ''}</span>
+          </div>
+        </div>
+      `;
+    });
+  });
+
+  html += `</div>`;
+  panel.innerHTML = html;
+  document.getElementById('backToDashboardBtn2').addEventListener('click', showDashboard);
+}
+
 function selectTrack(trackId){
   currentTrack = trackId;
   localStorage.setItem(TRACK_LOCAL_KEY, trackId);
@@ -626,6 +767,15 @@ let reviewSchedule = {};
 const REVIEW_INTERVALS = [1, 3, 7, 16, 35]; // days; caps at the last value on further successes
 const REVIEW_LOCAL_KEY = 'ledger_review_v1';
 let reviewState = null; // { lessonId, question: {...}, submitted, selected }
+
+// XP / Levels: global across all tracks, 100 XP per level.
+let xpTotal = 0;
+const XP_PER_LEVEL = 100;
+const XP_LOCAL_KEY = 'ledger_xp_v1';
+const XP_LESSON = 25;
+const XP_CHECKPOINT_PASS = 50;
+const XP_CHECKPOINT_FAIL = 20;
+const XP_REVIEW_CORRECT = 10;
 
 // Cycle state: which subject's turn is next, and how far through each subject's list we are.
 // { subjectTurn: 0, pointers: { CMA: 0, Finance: 0, Business: 0 } }
@@ -662,6 +812,11 @@ async function loadProgressAndRender(){
       const reviewSnap = await getDoc(doc(db, 'users', uid, 'meta', 'reviewSchedule'));
       if (reviewSnap.exists()) reviewSchedule = reviewSnap.data();
     } catch(e){ /* no review schedule yet — defaults stand */ }
+
+    try {
+      const xpSnap = await getDoc(doc(db, 'users', uid, 'meta', 'xp'));
+      if (xpSnap.exists()) xpTotal = xpSnap.data().total || 0;
+    } catch(e){ /* no xp doc yet — defaults stand */ }
   } else {
     try{ progress = JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}'); } catch(e){ progress = {}; }
     for (const track of TRACKS){
@@ -674,11 +829,16 @@ async function loadProgressAndRender(){
       const storedReview = JSON.parse(localStorage.getItem(REVIEW_LOCAL_KEY) || '');
       if (storedReview) reviewSchedule = storedReview;
     } catch(e){ /* defaults stand */ }
+    try{
+      const storedXp = localStorage.getItem(XP_LOCAL_KEY);
+      if (storedXp) xpTotal = parseInt(storedXp) || 0;
+    } catch(e){ /* defaults stand */ }
   }
 
   cycle = cycles[currentTrack];
   rebuildTrackData(currentTrack);
   renderStats();
+  renderXpHud();
 }
 
 async function saveReviewSchedule(){
@@ -692,6 +852,56 @@ async function saveReviewSchedule(){
   } else {
     localStorage.setItem(REVIEW_LOCAL_KEY, JSON.stringify(reviewSchedule));
   }
+}
+
+// ---------------- XP / LEVELS ----------------
+function getLevel(xp){
+  return Math.floor(xp / XP_PER_LEVEL) + 1;
+}
+
+async function saveXp(){
+  if (firebaseReady && uid){
+    try {
+      await setDoc(doc(db, 'users', uid, 'meta', 'xp'), { total: xpTotal });
+    } catch (err) {
+      console.error('Could not save XP to Firestore, falling back to local storage:', err);
+      localStorage.setItem(XP_LOCAL_KEY, String(xpTotal));
+    }
+  } else {
+    localStorage.setItem(XP_LOCAL_KEY, String(xpTotal));
+  }
+}
+
+async function awardXP(amount, label){
+  const levelBefore = getLevel(xpTotal);
+  xpTotal += amount;
+  const levelAfter = getLevel(xpTotal);
+  await saveXp();
+  renderXpHud();
+  showToast(`+${amount} XP — ${label}`, false);
+  if (levelAfter > levelBefore){
+    setTimeout(() => showToast(`Level up! Now Level ${levelAfter}`, true), 350);
+  }
+}
+
+function renderXpHud(){
+  const hud = document.getElementById('xpHud');
+  if (!hud) return;
+  const level = getLevel(xpTotal);
+  const withinLevel = xpTotal % XP_PER_LEVEL;
+  document.getElementById('xpLevelBadge').textContent = `Lv. ${level}`;
+  document.getElementById('xpBarFill').style.width = `${withinLevel}%`;
+  document.getElementById('xpCount').textContent = `${withinLevel} / ${XP_PER_LEVEL} XP`;
+}
+
+function showToast(text, isLevelUp){
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'toast' + (isLevelUp ? ' levelup' : '');
+  el.textContent = text;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), isLevelUp ? 3500 : 2700);
 }
 
 async function saveCycle(){
@@ -888,6 +1098,8 @@ async function submitQuiz(id){
     // Schedule the first spaced-repetition review for tomorrow
     reviewSchedule[id] = { interval: REVIEW_INTERVALS[0], dueDate: addDays(new Date(), REVIEW_INTERVALS[0]), reps: 0 };
     await saveReviewSchedule();
+
+    await awardXP(XP_LESSON, lesson.title);
   }
 
   renderQuizView(id);
@@ -1075,6 +1287,9 @@ async function finishReview(results){
     reviewSchedule[id] = { interval: REVIEW_INTERVALS[0], dueDate: addDays(new Date(), REVIEW_INTERVALS[0]), reps: 0 };
   }
   await saveReviewSchedule();
+  if (wasCorrect){
+    await awardXP(XP_REVIEW_CORRECT, 'review recalled');
+  }
   reviewState = null;
   goToNext(); // check for further due reviews before finally advancing rotation
 }
@@ -1144,7 +1359,11 @@ function renderCheckpointView(){
     document.getElementById('checkpointContinueBtn').addEventListener('click', async () => {
       cycle.checkpointsSeen = Math.floor((cycle.completedOrder || []).length / 5);
       await saveCycle();
+      const cpScore = checkpointState.answers.filter((a,i) => a === checkpointState.questions[i].correct).length;
+      const cpTotal = checkpointState.questions.length;
+      const cpPass = cpTotal ? (cpScore / cpTotal) >= 0.7 : false;
       checkpointState = null;
+      await awardXP(cpPass ? XP_CHECKPOINT_PASS : XP_CHECKPOINT_FAIL, cpPass ? 'checkpoint passed' : 'checkpoint attempted');
       goToNext();
     });
   }
