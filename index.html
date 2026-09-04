@@ -402,7 +402,8 @@ const TRACKS = [
   { id: 'cma', label: 'CMA · Finance · Business' },
   { id: 'mind', label: 'Philosophy & Psychology' },
   { id: 'negotiation', label: 'Negotiation · Communication · Persuasion' },
-  { id: 'cfa', label: 'CFA · Investing · Macro' }
+  { id: 'cfa', label: 'CFA · Investing · Macro' },
+  { id: 'tax', label: 'Small Business Tax' }
 ];
 let ALL_LESSONS = []; // every lesson fetched, unfiltered
 let currentTrack = 'cma';
@@ -496,7 +497,8 @@ const TRACK_STYLE = {
   cma: { accent: '#c9a24b', icon: '⌘' },
   mind: { accent: '#9b8ecb', icon: '◐' },
   negotiation: { accent: '#c67a4e', icon: '◈' },
-  cfa: { accent: '#5f9a72', icon: '△' }
+  cfa: { accent: '#5f9a72', icon: '△' },
+  tax: { accent: '#6f9bc4', icon: '▤' }
 };
 
 function renderDashboardGrid(){
@@ -631,7 +633,8 @@ let cycles = {
   cma: { subjectTurn: 0, pointers: {} },
   mind: { subjectTurn: 0, pointers: {} },
   negotiation: { subjectTurn: 0, pointers: {} },
-  cfa: { subjectTurn: 0, pointers: {} }
+  cfa: { subjectTurn: 0, pointers: {} },
+  tax: { subjectTurn: 0, pointers: {} }
 };
 let cycle = cycles.cma; // alias to the active track's cycle object
 let currentLessonId = null;
